@@ -88,6 +88,86 @@
           ""
         ],
         [
+          "copper_edge_clearance|119250000|77500000|750c16c2-05c8-4239-b7a5-98fce92b5b47|c089084e-1d89-4a64-a4cb-d6520cbc76df",
+          ""
+        ],
+        [
+          "copper_edge_clearance|121350000|75800000|ca02775d-9944-407d-874b-c6fc6ddf1559|7a32617e-7ed7-4ffe-bed8-0c272474f201",
+          ""
+        ],
+        [
+          "copper_edge_clearance|142103984|93688037|e7099736-bb63-467c-be6d-bd11886d39fe|e5cb4a84-87e6-4df8-953a-7b4e58a2c9c1",
+          ""
+        ],
+        [
+          "copper_edge_clearance|142104774|90091972|5ff42879-4306-4429-be07-b4fa6406edb3|5f024573-b08c-4fb9-9e82-96ef0bcb24b5",
+          ""
+        ],
+        [
+          "copper_edge_clearance|143622000|89818000|d8536f22-a036-44cc-b047-9362dd9fb53f|63b69a0c-14d6-4245-87d2-e8a8491b62e3",
+          ""
+        ],
+        [
+          "copper_edge_clearance|144129721|93639485|c0ea3475-17e6-4027-9bec-97db9c0e60be|ad054b81-e8c5-4faa-9979-f6899c929e8a",
+          ""
+        ],
+        [
+          "copper_edge_clearance|146603984|93638037|5db22165-c884-415c-8b80-794cf2867303|1ca12265-964e-437d-bb62-23645df59455",
+          ""
+        ],
+        [
+          "copper_edge_clearance|147278000|89768000|16e810d5-4812-48d2-97c9-3bb7fdbba1c8|e2e9c284-cb9d-426c-945c-c67a18fedcda",
+          ""
+        ],
+        [
+          "copper_edge_clearance|148122000|89768000|16e810d5-4812-48d2-97c9-3bb7fdbba1c8|a09db31d-63b6-48ac-829c-660dc4fd5cef",
+          ""
+        ],
+        [
+          "copper_edge_clearance|148629721|93589485|5dc2e9a5-e99a-4a4b-b06f-6bead853762f|020eee5a-bf46-4160-bbaf-efa3042f5cb6",
+          ""
+        ],
+        [
+          "copper_edge_clearance|151384482|93589485|040bce3f-7061-4fb7-9525-0ea8b5143e31|eec89799-26dd-46ff-ace7-8c3eb935348f",
+          ""
+        ],
+        [
+          "copper_edge_clearance|151872201|89768000|763637f5-8666-44a8-978c-a7d4eb30f4f5|5e0bf125-0990-4436-a67c-709761c3bff7",
+          ""
+        ],
+        [
+          "copper_edge_clearance|152716201|89768000|763637f5-8666-44a8-978c-a7d4eb30f4f5|3b449543-041a-43c1-ac58-1def3b4a6bea",
+          ""
+        ],
+        [
+          "copper_edge_clearance|153223922|93589485|bf356f7e-94b5-46dd-86c7-1d5446094c8f|2a7fd1a1-d71c-46de-acb6-ac3e87c0af6e",
+          ""
+        ],
+        [
+          "copper_edge_clearance|155803984|93638037|15aa12e8-5305-4b2c-a3f0-750365ea9e48|a684432d-851d-4731-9bad-4bc5d6c4fb9f",
+          ""
+        ],
+        [
+          "copper_edge_clearance|155804774|90041972|50147f38-92b5-4361-ba52-0b113ceeaf16|a8fbc619-fd6e-4718-abc6-441619f7596b",
+          ""
+        ],
+        [
+          "copper_edge_clearance|157829721|90090517|583cb807-363c-4485-a064-4d83afceffa0|87a84c97-5a88-449b-8d18-330476654a4c",
+          ""
+        ],
+        [
+          "copper_edge_clearance|157829721|93589485|5b494fc8-bc09-4df6-9589-26eaac3e271f|1d1af8af-ae07-4a68-9103-0201bdaa4961",
+          ""
+        ],
+        [
+          "copper_edge_clearance|179320000|77030000|54d022b7-c620-4d86-a1a5-1ee49536c9b6|3ad2fdb1-082e-4185-889b-1c017e956917",
+          ""
+        ],
+        [
+          "copper_edge_clearance|181750000|76850000|bf0b05f4-b9f3-4074-9c2d-e49c1c64bf33|deb63ac6-7cb8-40a0-9bd2-71335f8733b8",
+          ""
+        ],
+        [
           "isolated_copper|111743899|89871919|64c3770a-c08d-4725-a597-98b8b0edc914|00000000-0000-0000-0000-000000000000",
           ""
         ]
@@ -141,6 +221,7 @@
         "solder_mask_bridge": "error",
         "starved_thermal": "error",
         "text_height": "warning",
+        "text_on_edge_cuts": "error",
         "text_thickness": "warning",
         "through_hole_pad_without_hole": "error",
         "too_many_vias": "error",
@@ -158,7 +239,7 @@
         "max_error": 0.005,
         "min_clearance": 0.0,
         "min_connection": 0.0,
-        "min_copper_edge_clearance": 0.0,
+        "min_copper_edge_clearance": 0.3,
         "min_groove_width": 0.0,
         "min_hole_clearance": 0.1866,
         "min_hole_to_hole": 0.25,

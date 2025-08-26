@@ -120,6 +120,7 @@ enum class ExperimentMode
     openloop_ptn,
     closedloop_ptn,
     closedloop_airspeed,
+    modbus,
     boris_udp,
 };
 
@@ -180,6 +181,6 @@ class DeviceManager:public FBContext
         ErrorCode InitAndRun();
         ErrorCode TriggerHeaterExperiment(const heaterexperiment::RequestHeater *r, flatbuffers::FlatBufferBuilder &b);
         ErrorCode GetDebugInfoSize(size_t *sizeInBytes);
-        ErrorCode GetDebugInfo(flatbuffers::FlatBufferBuilder& b);      
+        ErrorCode GetDebugInfo(flatbuffers::FlatBufferBuilder& b); 
 };
 

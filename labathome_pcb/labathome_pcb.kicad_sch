@@ -9221,7 +9221,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical"
+		(property "Footprint" "liebler_CONN:IDC_2x03_P1.27mm_Vertical"
 			(at 205.74 87.63 0)
 			(effects
 				(font
