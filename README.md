@@ -95,17 +95,30 @@ Die aktuellen Schaltpläne und Layouts im KiCad-Format befinden sich im Verzeich
 # Getting Started - Software
 
 Die Software muss individuell für jedes Board compiliert werden, weil während des von Gulp gesteuerten Gesamt-Build-Prozesses diverse individuelle Dateien erzeugt und eincompiliert werden. Dazu gehören:
-- LabAtHome meKicldet sich per Sprachausgabe betriebsbereit. Die Ausgabe enthält auch den Hostnamen der Platine, der sich wiederum aus der MAC-Adresse ableitet. Alle Sprachausgaben werden zum Build-Zeitpunkt über Google TTS erzeugt und in Form von MP3-Dateien im Flash abgelegt. Ach ja, LabAtHome kann natürlich MP3 wiedergeben!
+- LabAtHome meldet sich per Sprachausgabe betriebsbereit. Die Ausgabe enthält auch den Hostnamen der Platine, der sich wiederum aus der MAC-Adresse ableitet. Alle Sprachausgaben werden zum Build-Zeitpunkt über Google TTS erzeugt und in Form von MP3-Dateien im Flash abgelegt. Ach ja, LabAtHome kann natürlich MP3 wiedergeben!
 - LabAtHome kommuniziert natürlich verschlüsselt! Dazu wird ein privater Schlüssel und ein Zertifikat für eben den Hostnamen erzeugt
 
-
-Selbst kompilieren? Geht!
-- Installiere das ESP-IDF!
+## Voraussetzungen
+- Installiere Visual Studio Code
+    - Installiere und konfiguriere die ESP-IDF Extension
+    - Optional: Isntalliere die Extension "Serial Monitor"
 - Installiere Node.js
-- Ich gehe davon aus, dass alle Checkouts in c:/repos erfolgen. Viele Pfade sind in den Konfigurationsdateien absolut und auf diesen Pfad angepasst
-- Checke dieses Repo https://github.com/klaus-liebler/labathome aus
-- Checke das repo https://github.com/klaus-liebler/espidf-components aus
-- Rufe "npm update" in C:\repos\labathome\espidf-component-labathome\web auf
+- Installiere Python
+- Installiere den Flatbuffers-Compiler (aka. runterladen https://github.com/google/flatbuffers/releases und ausführbare Datei in den "PATH" aufnehmen)
+- Checke diverse Repositories aus (Ich gehe davon aus, dass alle Checkouts in c:/repos erfolgen. Einige Pfade sind in den Konfigurationsdateien absolut und auf diesen Pfad angepasst)
+    - https://github.com/klaus-liebler/labathome
+    - https://github.com/klaus-liebler/espidf-components
+    - https://github.com/klaus-liebler/npm-packages
+    - https://github.com/klaus-liebler/espidf-component-webmanager,
+    - https://github.com/klaus-liebler/esp-idf-components-lcd
+- Rufe npm i in den folgenden Verzeichnissen auf:
+    - .../labathome/builder
+    - .../npm-package/<diverse...>
+- Editiere die Datei .../labathome/builder/gulpfile.ts im oberen Bereich direkt nach den Exports. Die Kommentare dort helfen hoffentlich beim Verständnis.
+- Lab@Home nutzt die Google TTS Engine während des Build-Prozesses, um individuelle Sprachausgaben zu erzeugen. Besorge Dir für die Google TTS API einen API-Key und erstelle eine .../labathome/builder/secrets.ts-Datei getreu dem Muster template_secrets.ts
+- Öffne in VS Code eine ESP IDF Console und wechsele in das Verzeichnis .../labathome/builder
+- Rufe npm run doOnce auf. Dies erzeugt u.a. ein selbst signiertes Zertifikat , das auf allen Computern als Stammzertifikat installiert werden kann und später zum Signieren der Board-Zertifikate verwendet wird.
+- Rufe "npm update" in C:\repos\labathome\espidf-component-labathome\espidf-component-webmanager, auf
 - Rufe "npm update" in "C:\repos\labathome\espidf-component-labathome\builder" auf
 - Rume "npm run gulp" in "C:\repos\labathome\espidf-component-labathome\builder" auf. Dieses erstellt individuelle Board-Files und die gesamte Web-Anwendung
 - TBC
