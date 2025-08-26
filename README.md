@@ -115,7 +115,7 @@ Die Software muss individuell für jedes Board compiliert werden, weil während 
     - .../labathome/builder
     - .../npm-package/<diverse...>
 - Editiere die Datei .../labathome/builder/gulpfile.ts im oberen Bereich direkt nach den Exports. Die Kommentare dort helfen hoffentlich beim Verständnis.
-- Lab@Home nutzt die Google TTS Engine während des Build-Prozesses, um individuelle Sprachausgaben zu erzeugen. Besorge Dir für die Google TTS API einen API-Key und erstelle eine .../labathome/builder/secrets.ts-Datei getreu dem Muster template_secrets.ts
+- Lab@Home nutzt die Google TTS Engine während des Build-Prozesses, um individuelle Sprachausgaben zu erzeugen. Der Computer, auf dem der Build durchgeführt wird, muss für den zugriff auf die Google Cloud TTS freigegeben sein: https://cloud.google.com/nodejs/docs/reference/text-to-speech/latest
 - Öffne in VS Code eine ESP IDF Console und wechsele in das Verzeichnis .../labathome/builder
 - Rufe npm run doOnce auf. Dies erzeugt u.a. ein selbst signiertes Zertifikat , das auf allen Computern als Stammzertifikat installiert werden kann und später zum Signieren der Board-Zertifikate verwendet wird.
 - Rufe "npm update" in C:\repos\labathome\espidf-component-labathome\espidf-component-webmanager, auf
