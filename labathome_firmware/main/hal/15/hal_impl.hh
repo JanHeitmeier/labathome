@@ -1,10 +1,14 @@
 #pragma once
-#define LCD_DISPLAY 1
-#define AUDIO 1
 #include <runtimeconfig_cpp/runtimeconfig_defines.hh>
 
-#include "iHAL.hh"
+#if(__BOARD_VERSION__ <=150300)
+    #define DISPLAY 0  // No display on old boards
+#else
+    #define LCD_DISPLAY 1
+#endif
+#define AUDIO 1
 
+#include "iHAL.hh"
 #include <inttypes.h>
 #include <limits>
 #include <algorithm>
@@ -21,6 +25,7 @@
 #include "sdmmc_cmd.h"
 #include <driver/sdmmc_host.h>
 
+#include "../i2c_discover.hh"
 #include <errorcodes.hh>
 #include <rgbled.hh>
 #include <bme280.hh>
@@ -398,16 +403,16 @@ public:
 
     void DoMonitoring() override
     {
-        static uint32_t qr_info_counter{0};
-        static esp_ip4_addr_t savedIpAddress{0};
-        static int64_t nextPlannedScreenChange{0};
         static int64_t nextOneLineStatus{0};
 
         int64_t now = millis();
+        //GetButtonGreenIsPressed does not work, if ESP_PROG is connected!
+        #if(LCD_DISPLAY>0)
         auto wm=webmanager::M::GetSingleton();
         esp_ip4_addr_t newIpAddress = wm->GetIpAddress();
-        //GetButtonGreenIsPressed does not work, if ESP_PROG is connected!
-#if(LCD_DISPLAY>0)
+        static uint32_t qr_info_counter{0};
+        static esp_ip4_addr_t savedIpAddress{0};
+        static int64_t nextPlannedScreenChange{0};
         if (newIpAddress.addr != savedIpAddress.addr){
             char buffer[32];
             snprintf(buffer, 31, "https://" IPSTR, IP2STR(&newIpAddress)); // IPSTR, because Smartphones do not always have a MDNS service running
@@ -642,12 +647,18 @@ public:
             }};
 
         ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, &i2c_master_handle));
+        i2c_discover::Discover(i2c_master_handle);
+        
 
         if(i2c_master_probe(i2c_master_handle, I2C_SETUP::STM32_I2C_ADDRESS, 1000)!=ESP_OK){
             ESP_LOGE(TAG, "STM32 is not there...");
         }
-        ESP_ERROR_CHECK(i2c_master_probe(i2c_master_handle, (uint8_t)AHT::ADDRESS::DEFAULT_ADDRESS, 1000));
-        ESP_ERROR_CHECK(i2c_master_probe(i2c_master_handle, lsm6ds3::ADDRESS, 1000));
+        if(i2c_master_probe(i2c_master_handle, (uint8_t)AHT::ADDRESS::DEFAULT_ADDRESS, 1000)!=ESP_OK){
+            ESP_LOGE(TAG, "AHT21 is not there...");
+        }
+        if(i2c_master_probe(i2c_master_handle, lsm6ds3::ADDRESS, 1000)!=ESP_OK){
+            ESP_LOGE(TAG, "LSM6DS3 is not there...");
+        }
 #if __BOARD_VERSION__>=150201
         ESP_ERROR_CHECK(i2c_master_probe(i2c_master_handle, IP5306::ADDRESS, 1000));
 #endif

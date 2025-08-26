@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 namespace I2C_SETUP{
-    constexpr uint8_t STM32_I2C_ADDRESS{126};
+    constexpr uint8_t STM32_I2C_ADDRESS{0x7E};
 }
 
 struct __attribute__((packed)) S2E_t

@@ -26,19 +26,21 @@ import * as cfg from "@klaus-liebler/espidf-vite-secure-build-tools/key_value_fi
 export const DEFAULT_BOARD_NAME="LABATHOME"
 export const DEFAULT_BOARD_VERSION=150200
 
+//Security
+enum eEncryptionMode { ENCRYPTED, NON_ENCRYPTED }
+const ENCRYPTION_MODE = eEncryptionMode.NON_ENCRYPTED as eEncryptionMode;
+const FLASH_ENCYRPTION_STRENGTH=idf.EncryptionStrength.AES256
 
 //Paths
 export const IDF_PATH=globalThis.process.env.IDF_PATH as string;
 export const USERPROFILE =globalThis.process.env.USERPROFILE as string;
-
-//Config
-const FLASH_ENCYRPTION_STRENGTH=idf.EncryptionStrength.AES256
 const IDF_PROJECT_ROOT = "C:\\repos\\labathome\\labathome_firmware";
 const IDF_COMPONENT_WEBMANAGER_ROOT = "C:/repos/espidf-component-webmanager";
 const GENERATED_ROOT = "c:\\repos\\generated";
-
-const BOARDS_BASE_DIR= path.join(USERPROFILE, "netcase/esp32_boards");
-const CERTIFICATES = path.join(USERPROFILE, "netcase/certificates");
+//hier werden alle board-spezifischen Daten abgelegt, z.B. Zertifikate, Sounds, Usersettings
+const BOARDS_BASE_DIR= path.join(USERPROFILE, "OneDrive - HSOS/esp32_boards");
+//hier wird der RootCA und die Testzertifikate abgelegt
+const CERTIFICATES = path.join(USERPROFILE, "OneDrive - HSOS/certificates");
 
 //Root Certificate Data
 //not needed export const ROOT_CA_SUBJECT_NAME ="Klaus Liebler"
@@ -46,10 +48,11 @@ const ROOT_CA_COMMON_NAME ="AAA Klaus Liebler personal Root CA"
 const PUBLIC_SERVER_FQDN = "liebler.iui.hs-osnabrueck.de"
 const HOSTNAME_TEMPLATE = "labathome_${mac_6char}"
 
+//According to your needs
 const APPLICATION_NAME = "labathome"
 const APPLICATION_VERSION = "1.0"
 
-const APPLICATION_SPECIFIC_SOUNDS:Array<tts.FilenameAndSsml> = [
+const BOARD_SPECIFIC_SOUNDS:Array<tts.FilenameAndSsml> = [
   new tts.FilenameAndSsml("ready", "<speak>Willkommen! <lang xml:lang='en-US'>Lab@Home</lang><say-as interpret-as='characters'>${mac_6char}</say-as> ist bereit</speak>"),
 ]
 
@@ -72,31 +75,58 @@ export const doOnce = gulp.series(
 export const buildForCurrent = gulp.series(
   createFiles,
   buildAndCompressWebProject,
-  buildAndEncryptFirmware,
+  buildFirmware,
 )
 
-export default gulp.series(
+export const defaultEncrypted = gulp.series(
   addOrUpdateConnectedBoard,
   buildForCurrent,
+  encryptFirmware,
   flashEncryptedFirmware,
 )
+
+export const defaultNonEncrypted = gulp.series(
+  addOrUpdateConnectedBoard,
+  buildForCurrent,
+  flashNonEncryptedFirmware
+)
+
+
+const defaultExport = (ENCRYPTION_MODE === eEncryptionMode.ENCRYPTED)
+  ? defaultEncrypted
+  : defaultNonEncrypted;
+
+export default defaultExport;
 
 export async function addOrUpdateConnectedBoard(cb: gulp.TaskFunctionCallback){
   return Context.get(contextConfig, true);
 }
 
-async function buildAndEncryptFirmware(cb: gulp.TaskFunctionCallback) {
-  var c=await Context.get(contextConfig)
-  await idf.buildFirmware(c);
-  //we need to update context, as the the build produces new files...
-  c=await Context.get(contextConfig);
+export async function info(cb: gulp.TaskFunctionCallback){
+  var info = await Context.get(contextConfig, true);
+  info.printInfo();
+  return cb();
+}
+
+async function buildFirmware(cb: gulp.TaskFunctionCallback) {
+  const c=await Context.get(contextConfig)
+  return idf.buildFirmware(c);
+}
+async function encryptFirmware(cb: gulp.TaskFunctionCallback) {
+
+  const c=await Context.get(contextConfig);
   return idf.encryptPartitions_Bootloader_App_PartitionTable_OtaData(c);
 } 
 
 async function flashEncryptedFirmware(cb: gulp.TaskFunctionCallback){
   const c = await Context.get(contextConfig)
   await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
-  return idf.flashEncryptedFirmware(c, true, false, true);
+  return idf.flashEncryptedFirmware(c, true, true, false);
+}
+
+async function flashNonEncryptedFirmware(cb: gulp.TaskFunctionCallback){
+  const c = await Context.get(contextConfig)
+  return idf.flashFirmware(c, true, false);
 }
 
 export async function createRootCA(cb: gulp.TaskFunctionCallback) {
@@ -155,7 +185,8 @@ export async function createFiles(cb: gulp.TaskFunctionCallback) {
    
   //Sounds
   await tts.convertTextToSpeech(COMMON_SENTENCES_DE, c.p.P_SOUNDS_DE);
-  await tts.convertTextToSpeech(APPLICATION_SPECIFIC_SOUNDS, c.p.boardSpecificPath(P.SOUNDS_DE_SUBDIR));
+  var interpolatedSentences=BOARD_SPECIFIC_SOUNDS.map(t=>new tts.FilenameAndSsml(t.name, strInterpolator(t.ssml, {mac_6char:mac_6char(c.b.mac), mac_12char:mac_12char(c.b.mac)})));
+  await tts.convertTextToSpeech(interpolatedSentences, c.p.boardSpecificPath(P.SOUNDS_DE_SUBDIR));
 
   //Config files
   const defs = await createObjectWithDefines(c);

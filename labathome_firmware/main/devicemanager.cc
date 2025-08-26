@@ -9,6 +9,7 @@
 #include "../generated/flatbuffers_cpp/ns03functionblock_generated.h"
 #include "../generated/flatbuffers_cpp/ns04heaterexperiment_generated.h"
 #include "esp_vfs.h"
+#include "modbus.hh"
 
 constexpr uint32_t TRIGGER_FALLBACK_TIME_MS{10000};
 constexpr size_t FILE_PATH_MAX =ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN;
@@ -169,6 +170,8 @@ void DeviceManager::EternalLoop(){
         ESP_LOGW(TAG, "No defaultfbd.fbd found. Continuing with factory dummy fbd");
     }
     hal->GreetUserOnStartup();
+
+    modbus::ModbusSetup(hal);
 
     ESP_LOGD(TAG, "devicemanager main loop starts");
     while (true)
@@ -495,7 +498,10 @@ ErrorCode DeviceManager::Loop()
 {
     static ExperimentMode previousExperimentMode = ExperimentMode::functionblock; //set in last line of this method
     uint32_t nowMsSteady = hal->GetMillis();
-    if(experimentMode != ExperimentMode::functionblock && nowMsSteady-this->lastExperimentTrigger>TRIGGER_FALLBACK_TIME_MS)
+    if(modbus::ModbusLoop()){
+        experimentMode = ExperimentMode::modbus;
+    }
+    if(!(experimentMode == ExperimentMode::functionblock || experimentMode==ExperimentMode::modbus) && nowMsSteady-this->lastExperimentTrigger>TRIGGER_FALLBACK_TIME_MS)
     {
         //auto fallback
         experimentMode = ExperimentMode::functionblock;
@@ -605,12 +611,13 @@ ErrorCode DeviceManager::Loop()
         hal->SetFan2Duty(this->setpointFan2);
         */
     }
-    else if(experimentMode==ExperimentMode::boris_udp){
+    else if(experimentMode==ExperimentMode::modbus){
         //do nothing
     }
     previousExperimentMode = this->experimentMode;
     return ErrorCode::OK;
 }
+
 
 ErrorCode DeviceManager::TriggerHeaterExperiment(const heaterexperiment::RequestHeater* r, flatbuffers::FlatBufferBuilder &b){
     if(r->mode()!=heaterexperiment::Mode::Mode_FunctionBlock){

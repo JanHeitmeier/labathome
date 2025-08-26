@@ -13,6 +13,9 @@
 #include <freertos/queue.h>
 
 //esp idf includes
+#include <tusb_cdc_acm.h>
+#include <tinyusb.h>
+#include "tusb_console.h"
 #include <esp_system.h>
 #include <esp_log.h>
 #include <esp_littlefs.h>
@@ -63,12 +66,42 @@ extern "C" void app_main()
     // Configure Logging
     //esp_log_level_set(TAG, ESP_LOG_INFO);
     //esp_log_level_set("esp_https_server", ESP_LOG_WARN);
+
+    // TinyUSB initialisieren
+    tinyusb_config_t tusb_cfg = {
+        .device_descriptor = nullptr,
+        .string_descriptor = nullptr,
+        .external_phy = false,
+    };
+    ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
+
+    // Console (erste CDC-Instanz) für printf/esp_log
+    // Erste CDC-Instanz für Modbus
+    tinyusb_config_cdcacm_t acm_cfg = {
+        .usb_dev = TINYUSB_USBDEV_0,
+        .cdc_port = TINYUSB_CDC_ACM_0,
+        .rx_unread_buf_sz = 0,
+        .callback_rx = nullptr, 
+        .callback_rx_wanted_char = nullptr,
+        .callback_line_state_changed = nullptr,
+        .callback_line_coding_changed = nullptr
+    };
+    ESP_ERROR_CHECK(tusb_cdc_acm_init(&acm_cfg));
+    esp_tusb_init_console(TINYUSB_CDC_ACM_0);
+
+    // Zweite CDC-Instanz für Modbus
+    acm_cfg.cdc_port =  TINYUSB_CDC_ACM_1;
+    ESP_ERROR_CHECK(tusb_cdc_acm_init(&acm_cfg));
+
+    ESP_LOGI(TAG, "USB initialisiert: Console auf CDC0, Modbus auf CDC1");
+
+
     ESP_LOGI(TAG, "\n%s", cfg::BANNER);
     ESP_LOGI(TAG, "%s is booting up. Firmware build at %s on Git %s", cfg::BOARD_NAME, cfg::CREATION_DT_STR, cfg::GIT_SHORT_HASH);
 
     // Configure NVS and SPIFFS
     size_t total = 0, used = 0;
-    esp_vfs_littlefs_conf_t conf = {"/spiffs", "storage", nullptr, 0,0,0,0};
+    esp_vfs_littlefs_conf_t conf = {"/spiffs", "storage", nullptr, 1,0,0,0};//Format if mount failed, read AND write access, really mount it, do not grow on mount
     ESP_ERROR_CHECK(esp_vfs_littlefs_register(&conf));
     ESP_ERROR_CHECK(esp_littlefs_info(conf.partition_label, &total, &used));
     ESP_LOGI(TAG, "LittleFS Partition successfully mounted: total: %dbyte, used: %dbyte", total, used);
