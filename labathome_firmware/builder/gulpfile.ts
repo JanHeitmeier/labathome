@@ -18,18 +18,18 @@ import {Context, ContextConfig} from "@klaus-liebler/espidf-vite-secure-build-to
 import * as usersettings from "@klaus-liebler/espidf-vite-secure-build-tools/usersettings_builder"
 import {cleanNpmExcept_PackageJson_node_modules, mac_12char, mac_6char, writeFileCreateDirLazy } from "@klaus-liebler/espidf-vite-secure-build-tools/utils";
 import * as vite_helper from "@klaus-liebler/espidf-vite-secure-build-tools/vite_helper";
-import { MyFavouriteDateTimeFormat, strInterpolator } from "@klaus-liebler/commons";
+import { eEncryptionMode, MyFavouriteDateTimeFormat, strInterpolator } from "@klaus-liebler/commons";
 import * as usersettings_def from "./symlink_usersettings";
 import * as cfg from "@klaus-liebler/espidf-vite-secure-build-tools/key_value_file_helper"
+
 
 //Default Board Type
 export const DEFAULT_BOARD_NAME="LABATHOME"
 export const DEFAULT_BOARD_VERSION=150200
 
 //Security
-enum eEncryptionMode { ENCRYPTED, NON_ENCRYPTED }
-const ENCRYPTION_MODE = eEncryptionMode.NON_ENCRYPTED as eEncryptionMode;
-const FLASH_ENCYRPTION_STRENGTH=idf.EncryptionStrength.AES256
+export const DEFAULT_ENCRYPTION_MODE = eEncryptionMode.NON_ENCRYPTED as eEncryptionMode;
+export const FLASH_ENCYRPTION_STRENGTH=idf.EncryptionStrength.AES256
 
 //Paths
 export const IDF_PATH=globalThis.process.env.IDF_PATH as string;
@@ -65,7 +65,7 @@ const COMMON_SENTENCES_DE:Array<tts.FilenameAndSsml> = [
   new tts.FilenameAndSsml("alarm_temperature", "<speak>Temperaturalarm</speak>")
 ]
 
-const contextConfig = new ContextConfig(GENERATED_ROOT, IDF_PROJECT_ROOT, BOARDS_BASE_DIR, DEFAULT_BOARD_NAME, DEFAULT_BOARD_VERSION);
+const contextConfig = new ContextConfig(GENERATED_ROOT, IDF_PROJECT_ROOT, BOARDS_BASE_DIR, DEFAULT_BOARD_NAME, DEFAULT_BOARD_VERSION, DEFAULT_ENCRYPTION_MODE);
 
 export const doOnce = gulp.series(
   createRootCA,
@@ -78,33 +78,19 @@ export const buildForCurrent = gulp.series(
   buildFirmware,
 )
 
-export const defaultEncrypted = gulp.series(
+export default gulp.series(
   addOrUpdateConnectedBoard,
   buildForCurrent,
-  encryptFirmware,
-  flashEncryptedFirmware,
+  encryptFirmwareIfNecessary,
+  flashFirmware,
 )
-
-export const defaultNonEncrypted = gulp.series(
-  addOrUpdateConnectedBoard,
-  buildForCurrent,
-  flashNonEncryptedFirmware
-)
-
-
-const defaultExport = (ENCRYPTION_MODE === eEncryptionMode.ENCRYPTED)
-  ? defaultEncrypted
-  : defaultNonEncrypted;
-
-export default defaultExport;
 
 export async function addOrUpdateConnectedBoard(cb: gulp.TaskFunctionCallback){
   return Context.get(contextConfig, true);
 }
 
 export async function info(cb: gulp.TaskFunctionCallback){
-  var info = await Context.get(contextConfig, true);
-  info.printInfo();
+  await Context.printInfo(contextConfig);
   return cb();
 }
 
@@ -112,21 +98,23 @@ async function buildFirmware(cb: gulp.TaskFunctionCallback) {
   const c=await Context.get(contextConfig)
   return idf.buildFirmware(c);
 }
-async function encryptFirmware(cb: gulp.TaskFunctionCallback) {
-
+async function encryptFirmwareIfNecessary(cb: gulp.TaskFunctionCallback) {
   const c=await Context.get(contextConfig);
-  return idf.encryptPartitions_Bootloader_App_PartitionTable_OtaData(c);
+  if(c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED) {
+    return idf.encryptPartitions_Bootloader_App_PartitionTable_OtaData(c);
+  }else{
+    return cb();
+  }
 } 
 
-async function flashEncryptedFirmware(cb: gulp.TaskFunctionCallback){
+async function flashFirmware(cb: gulp.TaskFunctionCallback){
   const c = await Context.get(contextConfig)
-  await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
-  return idf.flashEncryptedFirmware(c, true, true, false);
-}
-
-async function flashNonEncryptedFirmware(cb: gulp.TaskFunctionCallback){
-  const c = await Context.get(contextConfig)
-  return idf.flashFirmware(c, true, false);
+  if(c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED){
+    await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
+    return idf.flashEncryptedFirmware(c, true, true, false);
+  }else{
+    return idf.flashFirmware(c, true, false);
+  }
 }
 
 export async function createRootCA(cb: gulp.TaskFunctionCallback) {

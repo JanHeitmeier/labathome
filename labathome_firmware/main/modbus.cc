@@ -1,6 +1,8 @@
 constexpr int FIRMWARE_VERSION{5};
 // Hints for the command line test software "modpoll", that I used during development
-// In this tool, the register addresses ("r") is 1-based
+// In this tool, the register addresses ("r") is 1-based, you have to subtract 1 from the addresses in the lists below.
+// Btw, in contrast to "modpoll", the CODESYS tool uses 0-based addresses.
+
 // COMxy has to be replaced with your specific com port.
 
 // Query Inputs:      modpoll -r 1 -c 9 -t 1 -b 9600 COM17
