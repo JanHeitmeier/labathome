@@ -169,9 +169,7 @@ extern "C" void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
 
 extern "C" void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
-
   uint32_t error_code = HAL_I2C_GetError(hi2c);
-
   SetPhysicalOutputs();
   HAL_I2C_EnableListen_IT(hi2c);
 }
@@ -180,6 +178,7 @@ namespace USB_PD
 {
   void requestVoltage()
   {
+
     // check if 12V is supported
     for (int i = 0; i < PowerSink.numSourceCapabilities; i += 1)
     {
@@ -189,17 +188,7 @@ namespace USB_PD
         return;
       }
     }
-
-    // check if 15V is supported
-    for (int i = 0; i < PowerSink.numSourceCapabilities; i += 1)
-    {
-      if (PowerSink.sourceCapabilities[i].minVoltage <= 15000 && PowerSink.sourceCapabilities[i].maxVoltage >= 15000)
-      {
-        PowerSink.requestPower(15000);
-        return;
-      }
-    }
-    log_warn("Neither 12V nor 15V is supported");
+    log_warn("Neither 20V nor 12V is supported");
   }
 
   void handleUsbPdEvent(PDSinkEventType eventType)
@@ -274,7 +263,7 @@ void SetServoAngle(uint8_t servo_0_1_2_3_4_5, uint8_t angle_0_180)
   if (servo_0_1_2_3_4_5 > 3)
     return;
   TIM_SERVO->setCaptureCompare(servo_0_1_2_3_4_5 + 1, us, MICROSEC_COMPARE_FORMAT);
-#elif defined(ARDUINO_LABATHOME_15_2)
+#elif defined(ARDUINO_LABATHOME_15_2) || defined(ARDUINO_LABATHOME_15_3)
   if (servo_0_1_2_3_4_5 < 4)
   {
     TIM_SERVO->setCaptureCompare(servo_0_1_2_3_4_5 + 1, us, MICROSEC_COMPARE_FORMAT);
@@ -290,7 +279,7 @@ void SetFanSpeed(uint8_t power_0_100)
   }
 #ifdef ARDUINO_LABATHOME_15_0
   TIM_FAN->setCaptureCompare(FAN_CH, power_0_100, PERCENT_COMPARE_FORMAT);
-#elif defined(ARDUINO_LABATHOME_15_1) || defined(ARDUINO_LABATHOME_15_2)
+#elif defined(ARDUINO_LABATHOME_15_1) || defined(ARDUINO_LABATHOME_15_2) || defined(ARDUINO_LABATHOME_15_3)
   TIM_FAN_LED_WHITE->setCaptureCompare(FAN_CH, power_0_100, PERCENT_COMPARE_FORMAT);
 #endif
 }
@@ -303,7 +292,7 @@ void SetLedPowerPower(uint8_t power_0_100)
   }
 #ifdef ARDUINO_LABATHOME_15_0
   TIM_LED_WHITE->setCaptureCompare(LED_WHITE_CH, power_0_100, PERCENT_COMPARE_FORMAT);
-#elif defined(ARDUINO_LABATHOME_15_1) || defined(ARDUINO_LABATHOME_15_2)
+#elif defined(ARDUINO_LABATHOME_15_1) || defined(ARDUINO_LABATHOME_15_2) || defined(ARDUINO_LABATHOME_15_3)
   TIM_FAN_LED_WHITE->setCaptureCompare(LED_WHITE_CH, power_0_100, PERCENT_COMPARE_FORMAT);
 #endif
 }
@@ -315,7 +304,7 @@ void SetPhysicalOutputs()
   digitalWrite(PIN::RELAY, e2s_buffer.Relay);
 #endif
   digitalWrite(PIN::BL_RESET, e2s_buffer.Blreset);
-#if defined(ARDUINO_LABATHOME_15_1) || defined(ARDUINO_LABATHOME_15_2)
+#if defined(ARDUINO_LABATHOME_15_1) || defined(ARDUINO_LABATHOME_15_2) || defined(ARDUINO_LABATHOME_15_3)
   digitalWrite(PIN::BL_SLEEP, e2s_buffer.Blsleep);
   // digitalWrite(PIN::LCD_RESET, e2s_buffer.LcdReset);
 #endif
@@ -357,7 +346,7 @@ void app_loop20ms(uint32_t now)
   s2e_buffer.UsbpdVoltage_mv = PowerSink.activeVoltage;
   //s2e_buffer.Adc0 = analogRead(PIN::ADC_0_U1T);
   //s2e_buffer.Adc1 = analogRead(PIN::ADC_1_U1R);
-#if defined(ARDUINO_LABATHOME_15_2)
+#if defined(ARDUINO_LABATHOME_15_2) || defined(ARDUINO_LABATHOME_15_3)
   s2e_buffer.PIN_PB12 = digitalRead(PIN::PIN_PB12);
   s2e_buffer.Adc2_24V = analogRead(PIN::ADC_2_24V);
 // s2e_buffer.Adc3_Bl_i_sense=analogRead(PIN::BL_ISENSE); wrong, we do not read the input directly, but the OPAMPs output
@@ -398,31 +387,39 @@ void app_loop1000ms(uint32_t now)
   byteBuf2hexCharBuf(logBuffer1, 96, (uint8_t *)&s2e_buffer, sizeof(s2e_buffer));
   byteBuf2hexCharBuf(logBuffer2, 96, (uint8_t *)&e2s_buffer, sizeof(e2s_buffer));
   log_info("enc=%d s2e=%s, e2s=%s", encoder.GetTicks(), logBuffer1, logBuffer2);
-  // printf("printf\n");
-  // Serial.printf("Serial.printf\n");
-  // Serial4.printf("Serial4.printf\n");
+
 }
 
 void app_loop_superfast(uint32_t now)
 {
   // Heater; Wert ist von 0-100; Zyklus dauert 1000ms
   static uint32_t startOfCycle = 0;
+  static bool heaterBefore=false;
   time_t passedTime = now - startOfCycle;
   if (passedTime >= (10 * 100))
   {
     startOfCycle = now;
     if (e2s_buffer.Heater > 0)
     {
-      digitalWrite(PIN::HEATER, HIGH);
+      if(!heaterBefore){
+        digitalWrite(PIN::HEATER, HIGH);
+        log_info("Heater ON");
+      }
+      heaterBefore=true;
     }
     else
     {
       digitalWrite(PIN::HEATER, LOW);
+      heaterBefore=false;
     }
   }
   else if (passedTime >= 10 * e2s_buffer.Heater)
   {
+    if(heaterBefore){
+      log_info("Heater OFF");
+    }
     digitalWrite(PIN::HEATER, LOW);
+    heaterBefore=false;
   }
 }
 
@@ -433,8 +430,10 @@ void setup()
   led->Begin(millis(), &WAITING_FOR_CONNECTION, 10000);  
   Serial.begin(115200);
   
-  log_info("Application started");
-  
+  log_info("Application started log_info");//works
+  printf("Application started printf\n");//works
+  Serial.printf("Application started Serial.printf\n");//works
+  Serial4.printf("Application started Serial4.printf\n");//works
   
   log_info("Init gpio");
   pinMode(PIN::BTN_RED, INPUT);
@@ -476,8 +475,26 @@ void setup()
 #endif
 
 #ifdef ARDUINO_LABATHOME_15_3
+  pinMode(PIN::BL_SLEEP, OUTPUT);
+  pinMode(PIN::BL_ISENSE, INPUT_ANALOG); // OPAMP2+
+  pinMode(PIN::OPAMP3_M, INPUT_ANALOG);  // OPAMP3-
+  pinMode(PIN::OPAMP3_P, INPUT_ANALOG);  // OPAMP3+
+  pinMode(PIN::OPAMP3_Q, INPUT_ANALOG);  // OPAMP3+
+  pinMode(PIN::SUPPLY_24V_SENSE, INPUT_ANALOG);
+
+  hopamp2.Instance = OPAMP2;
+  hopamp2.Init.PowerMode = OPAMP_POWERMODE_NORMALSPEED;
+  hopamp2.Init.Mode = OPAMP_PGA_MODE;
+  hopamp2.Init.NonInvertingInput = OPAMP_NONINVERTINGINPUT_IO1;
+  hopamp2.Init.InternalOutput = ENABLE;
+  hopamp2.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
+  hopamp2.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_NO;
+  hopamp2.Init.PgaGain = OPAMP_PGA_GAIN_4_OR_MINUS_3;
+  hopamp2.Init.UserTrimming = OPAMP_TRIMMING_FACTORY;
+  HAL_ERROR_CHECK(HAL_OPAMP_Init(&hopamp2));
+  HAL_ERROR_CHECK(HAL_OPAMP_Start(&hopamp2));
   pinMode(PIN::ADC_2_24V, INPUT_ANALOG);
-  pinMode(PIN::LCD_RESET, INPUT);
+  pinMode(PIN::LCD_RESET, INPUT);//because it is normally driven by the ESP32
   pinMode(PIN::BL_RESET, OUTPUT);
   pinMode(PIN::PIN_PB12, INPUT);
 #endif
@@ -522,11 +539,21 @@ void setup()
   TIM_FAN_LED_WHITE->setPWM(LED_WHITE_CH, PA_2_ALT1, 50, 0);
 
 #elif defined(ARDUINO_LABATHOME_15_3)
+  TIM_SERVO = new HardwareTimer(TIM1);
+  TIM_SERVO->setPWM(SERVO0_CH, PC_0, 50, 0);
+  TIM_SERVO->setPWM(SERVO1_CH, PC_1, 50, 0);
+  TIM_SERVO->setPWM(SERVO2_CH, PC_2, 50, 0);
+  TIM_SERVO->setPWM(SERVO3_CH, PC_3, 50, 0);
+
+  TIM_FAN_LED_WHITE = new HardwareTimer(TIM15);
+  TIM_FAN_LED_WHITE->setPWM(FAN_CH, PA_3_ALT1, 50, 0); // PA2 and PA3 changed from LabAtHome15.1 to 15.2
+  TIM_FAN_LED_WHITE->setPWM(LED_WHITE_CH, PA_2_ALT1, 50, 0);
+
   log_info("Init ServoBus");
   ServoBusSerial.begin(1000000, SERIAL_8N1);
   //servoBus.pSerial = &ServoBusSerial;
   bool dummy=true;
-  while(true){
+  while(false){
     log_info("servoBus.Ping(5) returns %d",servoBus.Ping(5));
     servoBus.WritePosEx(5, 4095, 3400, 50);//servo(ID1) speed=3400，acc=50，move to position=4095.
     delay(2000);

@@ -5958,16 +5958,6 @@
 	)
 	(wire
 		(pts
-			(xy 165.1 59.69) (xy 156.21 59.69)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5bc84eea-5a6a-45d2-9c2d-ea9d2a33d155")
-	)
-	(wire
-		(pts
 			(xy 220.98 36.83) (xy 220.98 31.75)
 		)
 		(stroke
@@ -6035,16 +6025,6 @@
 			(type default)
 		)
 		(uuid "7ea42fbd-07dd-4713-9872-00df3ca9732a")
-	)
-	(wire
-		(pts
-			(xy 165.1 59.69) (xy 165.1 71.12)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8413f7f2-9bfd-466e-a45c-fa9e6e99b655")
 	)
 	(wire
 		(pts
@@ -7362,7 +7342,7 @@
 	)
 	(global_label "LCD_RES"
 		(shape input)
-		(at 175.26 71.12 0)
+		(at 166.37 59.69 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7372,7 +7352,7 @@
 		)
 		(uuid "9e05b021-2af0-4df8-96bd-70edd8e5d997")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 186.4094 71.12 0)
+			(at 177.5194 59.69 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13544,7 +13524,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Bridged")
-		(at 170.18 71.12 0)
+		(at 161.29 59.69 0)
 		(unit 1)
 		(exclude_from_sim yes)
 		(in_bom yes)
@@ -13552,7 +13532,7 @@
 		(dnp no)
 		(uuid "afdbfe7b-0376-44e7-82f2-49331f652a13")
 		(property "Reference" "JP3"
-			(at 169.926 71.882 0)
+			(at 161.036 60.452 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13560,7 +13540,7 @@
 			)
 		)
 		(property "Value" "LCD_RES"
-			(at 170.18 69.342 0)
+			(at 161.29 57.912 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13568,7 +13548,7 @@
 			)
 		)
 		(property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Bridged2Bar_RoundedPad1.0x1.5mm"
-			(at 170.18 71.12 0)
+			(at 161.29 59.69 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13577,7 +13557,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 170.18 71.12 0)
+			(at 161.29 59.69 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13586,7 +13566,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, closed/bridged"
-			(at 170.18 71.12 0)
+			(at 161.29 59.69 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13595,7 +13575,7 @@
 			)
 		)
 		(property "MPN" ""
-			(at 170.18 71.12 0)
+			(at 161.29 59.69 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13604,7 +13584,7 @@
 			)
 		)
 		(property "Manufacturer" ""
-			(at 170.18 71.12 0)
+			(at 161.29 59.69 0)
 			(effects
 				(font
 					(size 1.27 1.27)

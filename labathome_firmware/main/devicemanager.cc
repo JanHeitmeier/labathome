@@ -633,6 +633,9 @@ ErrorCode DeviceManager::TriggerHeaterExperiment(const heaterexperiment::Request
         this->heaterTN_secs=r->tn();
         this->heaterTV_secs=r->tv();
         this->heaterWorkingPointOffset=r->heater_power_working_point_percent();
+        if(r->mode()==heaterexperiment::Mode::Mode_OpenLoop){
+            this->setpointHeater=r->heater_power_percent();
+        }
     }
     float heaterTemp{0.0};
     float fanDuty{0.0};

@@ -25,7 +25,7 @@ import * as cfg from "@klaus-liebler/espidf-vite-secure-build-tools/key_value_fi
 
 //Default Board Type
 export const DEFAULT_BOARD_NAME="LABATHOME"
-export const DEFAULT_BOARD_VERSION=150200
+export const DEFAULT_BOARD_VERSION=150300
 
 //Security
 export const DEFAULT_ENCRYPTION_MODE = eEncryptionMode.NON_ENCRYPTED as eEncryptionMode;
