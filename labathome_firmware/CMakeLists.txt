@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.28)
 set(PROJECT_VER "0.0.0.4")
 
 set(GENERATED_DIR "C:/repos/generated/")

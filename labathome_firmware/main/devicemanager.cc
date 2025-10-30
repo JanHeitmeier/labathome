@@ -182,7 +182,7 @@ void DeviceManager::EternalLoop(){
         ESP_LOGD(TAG, "BeforeLoop");
         hal->BeforeLoop();
         ESP_LOGD(TAG, "Loop");
-        Loop();
+       // Loop();
         ESP_LOGD(TAG, "AfterLoop");
         hal->AfterLoop();
     }

@@ -28,7 +28,7 @@ export const DEFAULT_BOARD_NAME="LABATHOME"
 export const DEFAULT_BOARD_VERSION=150300
 
 //Security
-export const DEFAULT_ENCRYPTION_MODE = eEncryptionMode.NON_ENCRYPTED as eEncryptionMode;
+export const DEFAULT_ENCRYPTION_MODE = eEncryptionMode.ENCRYPTED as eEncryptionMode; // abgeändert da mit entcrypted board gestartet.
 export const FLASH_ENCYRPTION_STRENGTH=idf.EncryptionStrength.AES256
 
 //Paths
@@ -38,9 +38,9 @@ const IDF_PROJECT_ROOT = "C:\\repos\\labathome\\labathome_firmware";
 const IDF_COMPONENT_WEBMANAGER_ROOT = "C:/repos/espidf-component-webmanager";
 const GENERATED_ROOT = "c:\\repos\\generated";
 //hier werden alle board-spezifischen Daten abgelegt, z.B. Zertifikate, Sounds, Usersettings
-const BOARDS_BASE_DIR= path.join(USERPROFILE, "OneDrive - HSOS/esp32_boards");
+const BOARDS_BASE_DIR= path.join(USERPROFILE, "netcase/esp32_boards"); //<- Musste abgeändert werden weil netcase statt onedrive verwendet wird.
 //hier wird der RootCA und die Testzertifikate abgelegt
-const CERTIFICATES = path.join(USERPROFILE, "OneDrive - HSOS/certificates");
+const CERTIFICATES = path.join(USERPROFILE, "netcase/certificates");   //<- Musste abgeändert werden weil netcase statt onedrive verwendet wird.
 
 //Root Certificate Data
 //not needed export const ROOT_CA_SUBJECT_NAME ="Klaus Liebler"
@@ -111,7 +111,7 @@ async function flashFirmware(cb: gulp.TaskFunctionCallback){
   const c = await Context.get(contextConfig)
   if(c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED){
     await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
-    return idf.flashEncryptedFirmware(c, true, true, false);
+    return idf.flashEncryptedFirmware(c, true, true, false); // <-- First boolean to true for overwriting wifi settings
   }else{
     return idf.flashFirmware(c, true, false);
   }

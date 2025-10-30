@@ -692,6 +692,7 @@ public:
             .trans_queue_depth = 0,
             .flags = {
                 .enable_internal_pullup = 1,
+                .allow_pd = 0,
             }};
 
         ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, &i2c_master_handle));
@@ -707,17 +708,33 @@ public:
         if(i2c_master_probe(i2c_master_handle, lsm6ds3::ADDRESS, 1000)!=ESP_OK){
             ESP_LOGE(TAG, "LSM6DS3 is not there...");
         }
-#if __BOARD_VERSION__>=150201
+#if __BOARD_VERSION__ >= 150201
         ESP_ERROR_CHECK(i2c_master_probe(i2c_master_handle, IP5306::ADDRESS, 1000));
 #endif
         ESP_LOGI(TAG, "I2C bus successfully initialized and probed");
 
-#if(AUDIO>0)
-        nau88c22::M *codec = new nau88c22::M(i2c_master_handle, PIN_I2S_MCLK, PIN_I2S_BCLK, PIN_I2S_FS, PIN_I2S_DAC);
+// #if(AUDIO>0)
+//         nau88c22::M *codec = new nau88c22::M(i2c_master_handle, PIN_I2S_MCLK, PIN_I2S_BCLK, PIN_I2S_FS, PIN_I2S_DAC);
+//         mp3player = new AudioPlayer::Player(codec);
+//         ERRORCODE_CHECK(mp3player->InitMP3());
+//         ESP_LOGI(TAG, "Audio Codec Successfully initialized");
+// #endif
+#if (AUDIO > 0)
+        // Initialize the I2S codec (NAU88C22)
+        nau88c22::M *codec = new nau88c22::M(
+            i2c_master_handle,
+            PIN_I2S_MCLK,
+            PIN_I2S_BCLK,
+            PIN_I2S_FS,
+            PIN_I2S_DAC);
+
+        // Create the MP3 player instance
         mp3player = new AudioPlayer::Player(codec);
-        ERRORCODE_CHECK(mp3player->Init());
-        ESP_LOGI(TAG, "Audio Codec Successfully initialized");
+
+        // ⚠️ Do NOT call InitMP3() here — it's private and handled internally
+        ESP_LOGI(TAG, "Audio Codec successfully initialized");
 #endif
+
         // LED Strip
         strip = new RGBLED::M<LED_NUMBER, RGBLED::DeviceType::WS2812>();
         ERRORCODE_CHECK(strip->Begin(SPI3_HOST, PIN_LED_WS2812));

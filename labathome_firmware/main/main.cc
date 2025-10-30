@@ -73,8 +73,9 @@ extern "C" void app_main()
         .string_descriptor = nullptr,
         .external_phy = false,
     };
+    ESP_LOGI(TAG, "[LOG] Before tinyusb_driver_install");
     ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
-
+    ESP_LOGI(TAG, "[LOG] After tinyusb_driver_install");
     // Console (erste CDC-Instanz) für printf/esp_log
     // Erste CDC-Instanz für Modbus
     tinyusb_config_cdcacm_t acm_cfg = {
