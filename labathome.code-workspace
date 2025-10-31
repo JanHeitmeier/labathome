@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../espidf-components-lcd"
+		},
+		{
+			"path": "../espidf-components"
 		}
 	],
 	"settings": {

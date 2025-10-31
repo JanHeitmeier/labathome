@@ -169,7 +169,7 @@ void DeviceManager::EternalLoop(){
     if(this->ParseNewExecutableAndEnqueue(DEFAULTFBD_FBD_FILEPATH)!=ErrorCode::OK){
         ESP_LOGW(TAG, "No defaultfbd.fbd found. Continuing with factory dummy fbd");
     }
-    hal->GreetUserOnStartup();
+    //hal->GreetUserOnStartup();
 
     modbus::ModbusSetup(hal);
 
@@ -178,11 +178,10 @@ void DeviceManager::EternalLoop(){
     {
         xTaskDelayUntil(&xLastWakeTime, xFrequency);
         ESP_LOGD(TAG, "CheckForNewExecutable");
-        CheckForNewExecutable();
         ESP_LOGD(TAG, "BeforeLoop");
         hal->BeforeLoop();
         ESP_LOGD(TAG, "Loop");
-       // Loop();
+        Loop();
         ESP_LOGD(TAG, "AfterLoop");
         hal->AfterLoop();
     }
@@ -494,129 +493,20 @@ ErrorCode DeviceManager::CheckForNewExecutable()
     return ErrorCode::OK;
 }
 
+
 ErrorCode DeviceManager::Loop()
 {
-    static ExperimentMode previousExperimentMode = ExperimentMode::functionblock; //set in last line of this method
-    uint32_t nowMsSteady = hal->GetMillis();
-    if(modbus::ModbusLoop()){
-        experimentMode = ExperimentMode::modbus;
-    }
-    if(!(experimentMode == ExperimentMode::functionblock || experimentMode==ExperimentMode::modbus) && nowMsSteady-this->lastExperimentTrigger>TRIGGER_FALLBACK_TIME_MS)
-    {
-        //auto fallback
-        experimentMode = ExperimentMode::functionblock;
-        ESP_LOGI(TAG, "Auto fallback to experimentMode = ExperimentMode::functionblock;");
-    }
-    if(this->experimentMode!=previousExperimentMode){
-        //Safe settings on mode change!
-        hal->SetFanDuty(0, 0.);
-        hal->SetHeaterDuty(0);
-        hal->SetServoPosition(0, 0.);
-        //hal->SetAnalogOutput(0); do not set a out voltage here as this may interfere with MP3 play
-        //this->setpointAirspeed=0;
-        //this->setpointFan=0.0;
-        //this->setpointHeater=0.0;
-        //this->setpointServo1=0;
-        //this->setpointTemperature=0;
+    static uint32_t lastLogMs = 0;
+    uint32_t now = hal->GetMillis();
+    if (lastLogMs == 0) lastLogMs = now;
+    if ((uint32_t)(now - lastLogMs) >= 1000u) {
+        ESP_LOGI(TAG, "loop");
+        lastLogMs = now;
     }
     
-    if(experimentMode == ExperimentMode::functionblock)
-    {
-        for (const auto &i : this->currentExecutable->functionBlocks)
-        {
-            i->execute(this);
-        }
-    }
-    else if(experimentMode==ExperimentMode::openloop_heater){
-        heaterPIDController->SetMode(PID::Mode::OFF, nowMsSteady);
-        hal->SetHeaterDuty(this->setpointHeater);
-        hal->SetFanDuty(0, this->setpointFan);
-    }
-    else if(experimentMode==ExperimentMode::closedloop_heater){
-        if(heaterReset){
-            heaterPIDController->Reset();
-        }
-        heaterPIDController->SetMode(PID::Mode::CLOSEDLOOP, nowMsSteady);
-        heaterPIDController->SetWorkingPointOffset(this->heaterWorkingPointOffset);
-        heaterPIDController->SetKpTnTv(heaterKP, heaterTN_secs*1000, heaterTV_secs*1000/*, heaterTV_secs*200*/);
-        float act =0;
-        hal->GetHeaterTemperature(&act);
-        this->actualTemperature=act;
-        if(heaterPIDController->Compute(nowMsSteady)==ErrorCode::OK){ //OK means: Value changed
-             ESP_LOGI(TAG, "Computed a new setpointHeater %F", setpointHeater);
-        }
-        hal->SetHeaterDuty(this->setpointHeater);
-        hal->SetFanDuty(0, this->setpointFan);
-    }
-    else if(experimentMode==ExperimentMode::openloop_ptn){
-        /*
-        ptnPIDController->SetMode(PID_T1::Mode::OFF, nowMsSteady);
-        float *voltages;
-        hal->GetAnalogInputs(&voltages);
-        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]));
-        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]));
-        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]));
-        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]));
-        hal->SetAnalogOutput(0, this->setpointVoltageOut);
-        */
-    }
-    else if(experimentMode==ExperimentMode::closedloop_ptn){
-        /*
-        if(ptnReset){
-            ptnPIDController->Reset();
-        }
-        ptnPIDController->SetMode(PID_T1::Mode::CLOSEDLOOP, nowMsSteady);
-        if(ptnPIDController->SetKpTnTv(ptnKP, ptnTN_secs*1000, ptnTV_secs*1000, ptnTV_secs*200)!=ErrorCode::OBJECT_NOT_CHANGED)
-        {
-            ESP_LOGI(TAG, "SetKpTnTv to %F %F %F", ptnKP, ptnTN_secs, ptnTV_secs);
-        }
-        float *voltages;
-        hal->GetAnalogInputs(&voltages);
-        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]));
-        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]));
-        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]));
-        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]));
-        this->actualPtn=voltages[3];
-        if(ptnPIDController->Compute(nowMsSteady)==ErrorCode::OK){ //OK means: Value changed
-             ESP_LOGI(TAG, "Computed a new  setpointPtn %F", setpointVoltageOut);
-        }
-        hal->SetAnalogOutput(0, this->setpointVoltageOut);
-        */
-    }
-    else if(experimentMode==ExperimentMode::closedloop_airspeed){
-        /*File
-        if(airspeedReset){
-            airspeedPIDController->Reset();
-        }
-        if(airspeedPIDController->GetMode()!=AUTOMATIC)
-        {
-            ESP_LOGI(TAG, "airspeedPIDController->SetMode(AUTOMATIC);");
-            airspeedPIDController->SetMode(AUTOMATIC);
-        }
-        if(airspeedPIDController->GetKd()!=this->airspeedKD || airspeedPIDController->GetKi()!=this->airspeedKI || airspeedPIDController->GetKp()!=this->airspeedKP)
-        {
-            ESP_LOGI(TAG, "airspeedPIDController->SetTunings(KP, KI, KD); %f %f %f", airspeedKP, airspeedKI, airspeedKD);
-            airspeedPIDController->SetTunings(airspeedKP, airspeedKI, airspeedKD);
-        }
-        float act =0;
-        hal->GetAirSpeed(&act);
-        this->actualAirspeed=act;
-
-        bool newResult = airspeedPIDController->Compute();
-        if(newResult)
-        {
-            ESP_LOGI(TAG, "airspeedPIDController if(newResult): %F", this->setpointFan2);
-            hal->SetFan2Duty(this->setpointFan2);
-        }
-        hal->SetFan2Duty(this->setpointFan2);
-        */
-    }
-    else if(experimentMode==ExperimentMode::modbus){
-        //do nothing
-    }
-    previousExperimentMode = this->experimentMode;
     return ErrorCode::OK;
 }
+
 
 
 ErrorCode DeviceManager::TriggerHeaterExperiment(const heaterexperiment::RequestHeater* r, flatbuffers::FlatBufferBuilder &b){
