@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "recipes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "version": { "type": "string" }
+        },
+        "required": ["id","name"]
+      }
+    }
+  },
+  "required": ["recipes"]
+}

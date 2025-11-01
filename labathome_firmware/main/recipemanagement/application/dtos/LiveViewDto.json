@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "recipeId": { "type": "string" },
+    "stepIndex": { "type": "integer" },
+    "stepState": { "type": "string", "enum": ["Activating","Active","WaitingForUser","Deactivating","Deactive"] },
+    "instruction": { "type": "string" },
+    "statusColor": { "type": "string", "enum": ["green","yellow","red"] }
+  },
+  "required": ["recipeId","stepIndex","stepState"]
+}

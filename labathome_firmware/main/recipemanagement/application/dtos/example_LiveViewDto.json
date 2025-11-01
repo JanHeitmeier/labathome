@@ -1,0 +1,7 @@
+{
+  "recipeId": "hier fehlen noch Sensordaten etc. ",
+  "stepIndex": 2,
+  "stepState": "WaitingForUser",
+  "instruction": "Fill hopper with 500g material and press Confirm",
+  "statusColor": "yellow"
+}

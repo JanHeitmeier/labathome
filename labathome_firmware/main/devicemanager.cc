@@ -169,7 +169,7 @@ void DeviceManager::EternalLoop(){
     if(this->ParseNewExecutableAndEnqueue(DEFAULTFBD_FBD_FILEPATH)!=ErrorCode::OK){
         ESP_LOGW(TAG, "No defaultfbd.fbd found. Continuing with factory dummy fbd");
     }
-    //hal->GreetUserOnStartup();
+    hal->GreetUserOnStartup();
 
     modbus::ModbusSetup(hal);
 

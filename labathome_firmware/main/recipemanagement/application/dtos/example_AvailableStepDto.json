@@ -1,0 +1,44 @@
+{
+  "typeId": "motor.control",
+  "displayName": "Motor Control",
+  "description": "Run motor at RPM until time or temperature reached",
+  "params": [
+    {
+      "key": "rpm",
+      "type": "Int",
+      "required": true,
+      "defaultValue": "1000",
+      "label": "Speed (RPM)"
+    },
+    {
+      "key": "duration_ms",
+      "type": "Int",
+      "required": false,
+      "defaultValue": "60000",
+      "label": "Duration (ms)"
+    },
+    {
+      "key": "target_temp",
+      "type": "Double",
+      "required": false,
+      "label": "Stop Temperature"
+    }
+  ],
+  "ioAliases": [
+    {
+      "aliasName": "motor_out",
+      "isOutput": true,
+      "valueType": "Int"
+    },
+    {
+      "aliasName": "temp_sensor",
+      "isSensor": true,
+      "valueType": "Double"
+    },
+    {
+      "aliasName": "user_button",
+      "isInput": true,
+      "valueType": "Bool"
+    }
+  ]
+}

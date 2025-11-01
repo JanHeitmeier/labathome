@@ -895,7 +895,7 @@ public:
             vTaskDelay(pdMS_TO_TICKS(150));
         }
 #if(AUDIO>0)
-        mp3player->PlayMP3(ready_mp3_start, ready_mp3_size, 200, true);
+        //mp3player->PlayMP3(ready_mp3_start, ready_mp3_size, 200, true);
 #endif
         UnColorizeAllLed();
         return ErrorCode::OK;

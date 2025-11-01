@@ -1,0 +1,16 @@
+{
+  "recipes": [
+    {
+      "id": "mix_001",
+      "name": "Basic Mix",
+      "description": "Mix ingredients at 1200 RPM for 2 min",
+      "version": "1.0"
+    },
+    {
+      "id": "heat_002",
+      "name": "Heat and Hold",
+      "description": "Heat to target then hold",
+      "version": "1.2"
+    }
+  ]
+}

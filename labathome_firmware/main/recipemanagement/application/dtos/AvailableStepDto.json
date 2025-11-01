@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "typeId": { "type": "string" },
+    "displayName": { "type": "string" },
+    "description": { "type": "string" },
+    "params": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "type": { "type": "string", "enum": ["Bool","Int","Double","String"] },
+          "required": { "type": "boolean" },
+          "defaultValue": { "type": "string" },
+          "minValue": { "type": "number" },
+          "maxValue": { "type": "number" },
+          "label": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "required": ["key","type"]
+      }
+    },
+    "ioAliases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "aliasName": { "type": "string" },
+          "isInput": { "type": "boolean" },
+          "isOutput": { "type": "boolean" },
+          "isSensor": { "type": "boolean" },
+          "valueType": { "type": "string", "enum": ["Bool","Int","Double","String"] }
+        },
+        "required": ["aliasName"]
+      }
+    }
+  },
+  "required": ["typeId","displayName"]
+}
