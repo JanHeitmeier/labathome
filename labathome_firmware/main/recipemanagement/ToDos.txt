@@ -1,0 +1,119 @@
+# To-Do-Liste für das Recipe Management Framework (V2 - Entkoppelte Architektur)
+
+Dieses Dokument beschreibt die notwendigen Schritte zur Implementierung des Recipe Management Frameworks basierend auf einer entkoppelten und gekapselten Architektur.
+
+---
+
+### Sektion 1: Kommunikations-Infrastruktur
+
+**Ziel:** Die grundlegenden Verträge (Interfaces) und Werkzeuge für die Kommunikation definieren.
+
+- **1.1: RapidJSON-Bibliothek integrieren**
+  - Die RapidJSON-Header-Dateien als Komponente in das ESP-IDF-Projekt einbinden.
+  - Sicherstellen, dass die Header im `recipemanagement`-Code includiert werden können.
+
+- **1.2: Zentrale JSON-Serialisierungs-Klasse implementieren**
+  - Eine dedizierte Klasse `JsonSerialization.hh`/`.cc` im `example_implementations/recipemanagement/infrastructure/` Verzeichnis erstellen.
+  - Die Klasse bietet statische Methoden zur (De-)Serialisierung für jeden DTO-Typ (z.B. `serialize(const LiveViewDto& dto)`).
+  - Intern wird RapidJSON genutzt. Die DTOs selbst bleiben frei von JSON-Abhängigkeiten.
+
+- **1.3: `IMessageGateway`-Interface für ausgehende Nachrichten definieren**
+  - Ein Interface `IMessageGateway.hh` im `core/interfaces/messaging`-Verzeichnis erstellen.
+  - Dieses Interface deklariert überladene, rein virtuelle `send`-Methoden für jeden ausgehenden DTO-Typ (z.B. `virtual void send(const LiveViewDto& dto) = 0;`).
+  - **Zweck:** Dient als Rückkanal für den `RecipeApplicationService`, um Nachrichten an die UI zu senden, ohne die konkrete Implementierung (WebSocket) zu kennen.
+
+---
+
+### Sektion 2: Application Layer & Kapselung im DeviceManager
+
+**Ziel:** Die Kernlogik im `DeviceManager` kapseln und die Schnittstellen nach außen definieren.
+
+- **2.1: `RecipeApplicationService`-Klasse erstellen**
+  - Dies ist die zentrale Logik-Einheit ("Gehirn"). Die Klasse `RecipeApplicationService.hh`/`.cc` im `application`-Verzeichnis erstellen.
+  - **Abhängigkeiten:** Benötigt Referenzen auf den `IRecipeStorage`, die `RecipeEngine` und den `IMessageGateway` (für den Rückkanal).
+  - **Aufgaben:** Nimmt `CommandDto`-Objekte entgegen, steuert die `RecipeEngine`, lädt/speichert Rezepte und sendet Status-Updates über den `IMessageGateway`.
+
+- **2.2: `DeviceManager` erweitern**
+  - **Kapselung:** Der `DeviceManager` wird die Instanzen des `RecipeApplicationService`, `RecipeStorage` und der `RecipeEngine` als private Member halten und deren Lebenszyklus verwalten.
+  - **Methode für eingehende Befehle:** Eine öffentliche Methode `void HandleRecipeCommand(const std::string& json)` zum `DeviceManager` hinzufügen. Diese Methode deserialisiert den JSON-String und leitet den Befehl an den `RecipeApplicationService` weiter.
+  - **Methode für den Rückkanal:** Eine öffentliche Methode `void SetMessageGateway(IMessageGateway* gateway)` zum `DeviceManager` hinzufügen. Diese wird von `main.cc` aufgerufen, um dem `RecipeApplicationService` den Kommunikationskanal zur Verfügung zu stellen.
+
+- **2.3: Initialisierungslogik im `DeviceManager` implementieren**
+  - Im Konstruktor oder in der `InitAndRun`-Methode des `DeviceManager` werden die `RecipeStorage`-Implementierung, die `RecipeEngine` und der `RecipeApplicationService` instanziiert und miteinander verknüpft.
+
+---
+
+### Sektion 3: Anbindung an die Außenwelt
+
+**Ziel:** Die Brücke von der `main.cc` zur gekapselten Logik im `DeviceManager` schlagen.
+
+- **3.1: `RecipeManagementPlugin`-Klasse implementieren**
+  - Eine "dumme" Plugin-Klasse `RecipeManagementPlugin.hh`/`.cc` im `webmanager_plugins`-Verzeichnis erstellen.
+  - **Implementiert `IMessageGateway`:** Die Klasse erbt von `webmanager::iWebmanagerPlugin` UND implementiert das `IMessageGateway`-Interface aus Schritt 1.3. Die `send`-Methoden nutzen den `iWebmanagerCallback`, um die serialisierten DTOs tatsächlich zu versenden.
+  - **Abhängigkeit:** Erhält im Konstruktor nur eine Referenz auf den `DeviceManager`.
+  - **Implementierung:** Die `ProvideWebsocketMessage`-Methode ruft lediglich `deviceManager->HandleRecipeCommand(json)` auf.
+
+- **3.2: Verdrahtung in `main.cc` anpassen**
+  - In `app_main()` in `main.cc` die finale Verknüpfung durchführen:
+    1. `DeviceManager` instanziieren.
+    2. `RecipeManagementPlugin` instanziieren und ihm den `DeviceManager`-Zeiger übergeben.
+    3. `deviceManager->SetMessageGateway(plugin);` aufrufen, um den Rückkanal zu etablieren.
+    4. Das neue Plugin zur `plugins`-Vektorliste hinzufügen.
+
+---
+
+### Sektion 4: Core Engine
+
+**Ziel:** Die Logik zur Abarbeitung von Rezepten implementieren.
+
+- **4.1: `RecipeEngine`-Klasse als FreeRTOS-Task entwerfen**
+  - **Architektur-Entscheidung:** Die `RecipeEngine` wird in einem eigenen, dedizierten FreeRTOS-Task ausgeführt, um eine saubere Trennung und robustes Zeitverhalten zu gewährleisten.
+  - **Task-Erstellung:** Die `RecipeEngine` erhält eine `Start()`-Methode, die den Task erstellt und startet. Diese wird vom `DeviceManager` aufgerufen.
+  - **Task-Schleife:** Die Hauptlogik befindet sich in einer `while(true)`-Schleife innerhalb des Tasks. Diese Schleife ist für die Abarbeitung des aktiven Rezepts zuständig.
+  - **Zustandsverwaltung:** Die Engine verwaltet den Zustand des Rezepts (z.B. `IDLE`, `RUNNING`, `PAUSED`) und den Index des aktuellen Schritts.
+  - **Schritt-Abarbeitung:** Innerhalb der Schleife werden die `onActivating`, `onActive`, `onDeactivating`-Methoden des jeweils aktiven `IStep`-Objekts aufgerufen. Zeitverzögerungen innerhalb eines Schritts können einfach mit `vTaskDelay()` realisiert werden.
+  - **Befehls-Queue:** Zur Kommunikation vom `RecipeApplicationService` zur `RecipeEngine` wird eine FreeRTOS-Queue verwendet. Befehle wie "Start", "Stop", "Pause" werden als Nachrichten in diese Queue gelegt, um Race Conditions zu vermeiden.
+  - **Status-Updates:** Die Engine sendet regelmäßig Status-Updates (z.B. `LiveViewDto`) über den `IMessageGateway` an die UI. Der Zugriff auf geteilte Daten zwischen dem Engine-Task und anderen Tasks (z.B. dem Webserver-Task) muss bei Bedarf mit Mutexes geschützt werden.
+
+- **4.2: IO-Mapping mittels `IoResourceManager` finalisieren**
+  - **Architektur-Bestätigung:** Das IO-Mapping wird über den bestehenden `IoResourceManager` (Singleton) realisiert. Dieser agiert als zentrale Registry für alle `IInput`- und `IOutput`-Instanzen.
+  - **Initialisierung:** Der `IoResourceManager` wird, wie bereits implementiert, im Konstruktor des `RecipeApplicationService` über `IoResourceManager::instance().init(hal)` initialisiert.
+  - **Verwendung in der `RecipeEngine`:** Wenn die `RecipeEngine` einen Schritt ausführt, verwendet sie den `IoResourceManager`, um die benötigten IO-Zeiger aufzulösen (z.B. `IoResourceManager::instance().resolveOutput("Fan")`). Diese Zeiger werden dann dem `StepContext` des Schritts übergeben.
+  - **Aufgabe:** Sicherstellen, dass alle für die Rezepte benötigten `IInput`- und `IOutput`-Implementierungen in der `IoResourceManager::init()`-Methode registriert werden.
+
+---
+
+### Sektion 5: Frontend-Integration (TypeScript)
+
+**Ziel:** Die TypeScript-UI an die neue JSON-API anbinden.
+
+- **5.1: Allgemeiner WebSocket-Service (Hilfsklasse)**
+  - Einen zentralen Service in TypeScript erstellen, der die WebSocket-Verbindung zum ESP32 aufbaut und verwaltet.
+  - Stellt typsichere Methoden zum Senden von JSON-Befehlen bereit (z.B. `sendStartRecipe(recipeId: string)`).
+  - Implementiert ein Callback- oder Event-System (z.B. mit RxJS Subjects), um eingehende DTOs an die UI-Komponenten zu verteilen.
+  - Definiert TypeScript-Interfaces, die den C++ DTOs exakt entsprechen (`LiveViewDto`, `CommandDto`, etc.).
+
+- **5.2: Dashboard-Controller (UI-Komponente)**
+  - **Aufgabe:** Anzeigen der gespeicherten Rezepte und Starten eines Rezepts.
+  - Beim Laden der Komponente einen `get_recipe_list`-Befehl an das Backend senden.
+  - Die empfangene Liste von Rezeptnamen anzeigen.
+  - Für jedes Rezept einen "Start"-Button bereitstellen, der den `start_recipe`-Befehl über den WebSocket-Service sendet.
+
+- **5.3: LiveView-Controller (UI-Komponente)**
+  - **Aufgabe:** Echtzeit-Anzeige des laufenden Prozesses.
+  - Den `LiveViewDto`-Nachrichtenstrom vom WebSocket-Service abonnieren.
+  - Die empfangenen Daten visualisieren (z.B. Name des Rezepts, aktueller Schritt, Fortschritt, relevante Sensorwerte).
+  - Buttons für "Pause" und "Stop" implementieren, die die entsprechenden Befehle senden.
+
+- **5.4: Rezept-Editor-Controller (UI-Komponente)**
+  - **Aufgabe:** Erstellen und Bearbeiten von Rezepten.
+  - Beim Laden einen `get_available_steps`-Befehl senden, um die Metadaten aller `IStep`-Implementierungen zu erhalten.
+  - Eine Palette mit den verfügbaren Schritten anzeigen.
+  - Dem Benutzer ermöglichen, per Drag-and-Drop eine Rezept-Abfolge zu erstellen.
+  - Ein Formular zur Konfiguration der Parameter für den jeweils ausgewählten Schritt bereitstellen.
+  - Eine "Speichern"-Funktion implementieren, die das gesamte Rezept als JSON-Objekt an das Backend sendet (Befehl `save_recipe`).
+
+- **5.5: Messwerte-Controller (UI-Komponente, optional)**
+  - **Aufgabe:** Detaillierte Anzeige von historischen oder Echtzeit-Messwerten.
+  - Einen dedizierten `MetricsDto`-Nachrichtenstrom abonnieren.
+  - Die empfangenen Daten in Graphen (z.B. mit Chart.js) oder Tabellen darstellen.

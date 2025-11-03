@@ -204,8 +204,7 @@ protected:
     }
 
     void copyParamValuesFrom(const StepBase& src) {
-        // This requires that the derived class has already initialized its ParamDef members
-        // and registered the pointers via registerParamDefs().
+        //paramdef liste muss schon gefüllt sein für diese Funktion
         for (size_t i = 0; i < m_paramPtrs.size() && i < src.m_paramPtrs.size(); ++i) {
             if (m_paramPtrs[i] && src.m_paramPtrs[i]) {
                 // Deep copy the value
@@ -271,11 +270,8 @@ private:
     }
 
     State state_{State::Inactive};
-    using ParamMap = std::unordered_map<std::string_view, ParamDef*>;
-    using AliasMap = std::unordered_map<std::string_view, IoAliasDef*>;
-
-    ParamMap m_paramMap;
-    AliasMap m_aliasMap;
+    std::unordered_map<std::string_view, ParamDef*> m_paramMap;
+    std::unordered_map<std::string_view, IoAliasDef*> m_aliasMap;
 
     std::uint32_t typeId_{0};
     std::string displayName_{};

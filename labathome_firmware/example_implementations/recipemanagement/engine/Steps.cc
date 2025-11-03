@@ -50,11 +50,11 @@ public:
           red("RedButton", true, false, true),
           fan("Fan", false, true, false)
     {
-        // Registriere Parameter und IO-Aliases
+        // Registriere Parameter und IO-Aliases damit die Logik auf Variablen zugreifen kann. 
         registerParamDefs({ &waitMs, &fanMs, &fanDuty});
         registerIoAliases({ &green, &red, &fan });
     }
-
+    //Kopierkonstruktor, der alle Parameterwerte kopiert
     TwoButtonFanStep(const TwoButtonFanStep& o)
         : StepBase(o),
           waitMs(o.waitMs),
@@ -76,6 +76,7 @@ public:
         }
     }
 
+    //Ab hier wird die Step-Logik implementiert
 
     void initialize() override {
         setState(State::Inactive);
