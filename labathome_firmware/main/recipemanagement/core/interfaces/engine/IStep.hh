@@ -115,6 +115,12 @@ public:
         if (!value) return false;
         ParamDef* p = findParamDefPtr(key);
         if (!p) return false;
+
+        // Optional: Type check if the parameter already has a value/type defined
+        if (p->value && p->value->kind() != ValueKind::Unknown && p->value->kind() != value->kind()) {
+            return false;
+        }
+
         p->value = std::move(value);
         return true;
     }
@@ -129,16 +135,14 @@ public:
         md.params.clear();
         for (ParamDef* p : m_paramPtrs) {
             if (p) {
-                ParamDef copy = *p;
-                md.params.push_back(std::move(copy));
+                md.params.push_back(*p); // Uses ParamDef's copy constructor
             }
         }
 
         md.ioAliases.clear();
         for (IoAliasDef* a : m_aliasPtrs) {
             if (a) {
-                IoAliasDef copy = *a;
-                md.ioAliases.push_back(std::move(copy));
+                md.ioAliases.push_back(*a); // Uses IoAliasDef's copy constructor
             }
         }
 
@@ -200,9 +204,19 @@ protected:
     }
 
     void copyParamValuesFrom(const StepBase& src) {
+        // This requires that the derived class has already initialized its ParamDef members
+        // and registered the pointers via registerParamDefs().
         for (size_t i = 0; i < m_paramPtrs.size() && i < src.m_paramPtrs.size(); ++i) {
-            if (m_paramPtrs[i] && src.m_paramPtrs[i] && src.m_paramPtrs[i]->value) {
-                m_paramPtrs[i]->value = src.m_paramPtrs[i]->value->clone();
+            if (m_paramPtrs[i] && src.m_paramPtrs[i]) {
+                // Deep copy the value
+                if (src.m_paramPtrs[i]->value) {
+                    m_paramPtrs[i]->value = src.m_paramPtrs[i]->value->clone();
+                } else {
+                    m_paramPtrs[i]->value = nullptr;
+                }
+                // Deep copy min/max values
+                m_paramPtrs[i]->minValue = cloneOptionalValuePtr(src.m_paramPtrs[i]->minValue);
+                m_paramPtrs[i]->maxValue = cloneOptionalValuePtr(src.m_paramPtrs[i]->maxValue);
             }
         }
     }
@@ -215,6 +229,18 @@ protected:
                 p->maxValue = std::nullopt;
             }
         }
+    }
+
+    template<typename T>
+    static T readParamOrDefault(const ParamDef& p, T defaultValue) {
+        if (!p.value) {
+            return defaultValue;
+        }
+        T val;
+        if (p.value->get<T>(val)) {
+            return val;
+        }
+        return defaultValue;
     }
 
     bool isTimerExpired(StepContext& ctx, const char* name) const {
@@ -245,8 +271,11 @@ private:
     }
 
     State state_{State::Inactive};
-    std::unordered_map<std::string_view, ParamDef*> m_paramMap;
-    std::unordered_map<std::string_view, IoAliasDef*> m_aliasMap;
+    using ParamMap = std::unordered_map<std::string_view, ParamDef*>;
+    using AliasMap = std::unordered_map<std::string_view, IoAliasDef*>;
+
+    ParamMap m_paramMap;
+    AliasMap m_aliasMap;
 
     std::uint32_t typeId_{0};
     std::string displayName_{};

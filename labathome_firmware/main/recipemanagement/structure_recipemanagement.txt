@@ -1,0 +1,154 @@
+# 📂 Architektur-Dokumentation: Recipe Management System
+
+Dieses Dokument beschreibt die Software-Architektur des Recipe Management Systems, basierend auf den Prinzipien der Clean Architecture und des Domain-Driven Design (DDD).
+
+---
+
+## 🎯 1. Architektur-Ziele
+
+- **Plattformunabhängigkeit:** Die Kernlogik (Domain) soll ohne ESP32-spezifischen Code auskommen.
+- **Testbarkeit:** Jede Schicht, insbesondere die Kernlogik, soll isoliert testbar sein.
+- **Wartbarkeit & Erweiterbarkeit:** Klare Verantwortlichkeiten und geringe Kopplung sollen Änderungen und neue Features erleichtern.
+- **Austauschbarkeit:** Technische Details wie Speicher (LittleFS), Kommunikation (WebSockets) oder Hardware sind austauschbar, ohne die Kernlogik zu verändern.
+
+---
+
+## 🧅 2. Das Schichten-Modell (Zwiebel-Architektur)
+
+Die Architektur ist in vier konzentrische Schichten aufgeteilt. Die wichtigste Regel lautet: **Abhängigkeiten zeigen immer nur nach innen.**
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              PRESENTATION                                │  <-- Einstiegspunkt (z.B. DeviceManager)
+│                                    │                                     │
+│                                    ▼                                     │
+│   ┌────────────────────────────────────────────────────────────────────┐   │
+│   │                            APPLICATION                             │   │  <-- Anwendungsfälle (Use Cases)
+│   │                                │                                   │   │
+│   │                                ▼                                   │   │
+│   │   ┌──────────────────────────────────────────────────────────────┐   │   │
+│   │   │                              CORE                            │   │   │  <-- Geschäftslogik & Interfaces (Ports)
+│   │   │                  (Domain Entities, Value Objects)            │   │   │
+│   │   └──────────────────────────────────────────────────────────────┘   │   │
+│   │                                ▲                                   │   │
+│   │                                │ (Dependency Inversion)            │   │
+│   │   ┌──────────────────────────────────────────────────────────────┐   │   │
+│   │   │                         INFRASTRUCTURE                         │   │   │  <-- Technische Details (Adapter)
+│   │   │               (Engine, Storage, Messaging Impl.)             │   │   │
+│   │   └──────────────────────────────────────────────────────────────┘   │   │
+│   └────────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📚 3. Detaillierte Beschreibung der Ordner & Verantwortlichkeiten
+
+### 🔵 **CORE** - Der Kern (plattformunabhängig)
+*Kennt keine äußeren Schichten. Enthält die reine Geschäftslogik.*
+
+- **`core/domain/entities`**:
+    - **Zweck:** Zentrale Geschäftsobjekte mit Identität und Lebenszyklus.
+    - **Beispiel:** `Recipe.hh` - Definiert, was ein Rezept ist (ID, Name, Steps), aber nicht, wie es gespeichert oder ausgeführt wird.
+
+- **`core/domain/value-objects`**:
+    - **Zweck:** Unveränderliche Objekte, die einen Wert beschreiben, aber keine eigene Identität haben.
+    - **Beispiele:** `StepMetadata.hh` (beschreibt einen Step-Typ), `StepContext.hh` (Laufzeit-Kontext für einen Step).
+
+- **`core/interfaces` (Ports)**:
+    - **Zweck:** Abstrakte Verträge (Schnittstellen), die von der Infrastructure-Schicht implementiert werden müssen (Dependency Inversion).
+    - **`storage/IRecipeStorage.hh`**: Definiert, wie Rezepte geladen und gespeichert werden (`load`, `save`, `list`).
+    - **`engine/IStep.hh`, `IValue.hh` etc.**: Definieren, wie ein ausführbarer Step und seine Parameter aussehen müssen.
+    - **`messaging/*.hh`**: Definieren, WAS nach außen kommuniziert wird, aber nicht WIE.
+        - **FEHLEND:** `ILiveViewGateway.hh` (sendet Live-Daten), `IRecipeInfoGateway.hh` (sendet Rezeptlisten, Step-Typen).
+
+---
+
+### 🟢 **APPLICATION** - Die Anwendungslogik
+*Orchestriert die Domain-Objekte, um konkrete Anwendungsfälle abzubilden. Kennt nur den CORE-Layer.*
+
+- **`application/usecases`**:
+    - **Zweck:** Implementiert einzelne, konkrete Anwendungsfälle ("User Stories"). Dies ist das Herz der Anwendungslogik.
+    - **FEHLEND:**
+        - `ExecuteRecipeUseCase.hh/.cc`: Startet ein Rezept.
+        - `GetRecipeListUseCase.hh/.cc`: Holt die Liste aller Rezepte.
+        - `GetAvailableStepsUseCase.hh/.cc`: Holt die Metadaten aller Step-Typen.
+        - `CreateRecipeUseCase.hh/.cc`, `DeleteRecipeUseCase.hh/.cc`, etc.
+
+- **`application/services`**:
+    - **Zweck:** Koordinieren komplexere Abläufe oder verwalten den Zustand über mehrere Use Cases hinweg.
+    - **Beispiel:** `RecipeStorageManager.hh` (könnte in einen Use Case überführt oder als Service beibehalten werden).
+    - **FEHLEND:** `RecipeExecutionManager.hh` (verwaltet den Zustand der `RecipeEngine` und triggert Live-View-Updates).
+
+- **`application/dtos`**:
+    - **Zweck:** "Dumme" Datencontainer für den Austausch zwischen den Schichten, insbesondere zur Kommunikation mit der Außenwelt (z.B. Web-UI).
+    - **AKTUELL:** JSON-Dateien. **SOLLTE SEIN:** C++ Header (`.hh`) mit `structs`.
+    - **FEHLEND (als .hh):** `AvailableRecipesDto.hh`, `LiveViewDto.hh`, `CommandDto.hh` etc.
+
+---
+
+### 🟡 **INFRASTRUCTURE** - Die technische Umsetzung (Adapter)
+*Implementiert die Interfaces aus dem CORE. Enthält allen plattformspezifischen Code (ESP32, LittleFS, WebSockets).*
+
+- **`infrastructure/engine`**:
+    - **Zweck:** Konkrete Implementierung der Recipe-Ausführung.
+    - **Beispiele:** `RecipeEngine.hh` (die State Machine, die Steps ausführt), `StepTypeRegistry.hh` (sammelt alle kompilierten Step-Typen), `IoResourceManager.hh` (mappt Aliase auf echte Hardware-Pins).
+
+- **`infrastructure/storage`**:
+    - **Zweck:** Konkrete Implementierung des `IRecipeStorage`-Interfaces.
+    - **FEHLEND:** `LittleFSRecipeStorage.hh/.cc` (nutzt die ESP-IDF LittleFS API, um Rezepte als JSON-Dateien zu speichern/laden).
+
+- **`infrastructure/messaging`**:
+    - **Zweck:** Implementiert die `messaging`-Interfaces aus dem CORE. Sendet Daten an die Web-UI.
+    - **`LiveViewCommunication.hh`** ist ein Kandidat für eine Implementierung.
+    - **FEHLEND:**
+        - `WebSocketLiveViewGateway.hh/.cc`: Implementiert `ILiveViewGateway` und nutzt das `webmanager`-Callback, um Live-Daten per WebSocket zu senden.
+        - `HttpRecipeInfoGateway.hh/.cc`: Implementiert `IRecipeInfoGateway` und sendet z.B. die Rezeptliste als JSON über einen HTTP-Endpunkt.
+    - **`IMessageReciever.hh`** ist hier falsch platziert. Eingehende Nachrichten werden direkt von den Webmanager-Plugins verarbeitet.
+
+- **`infrastructure/parsers`**:
+    - **Zweck:** Konvertierung von Datenformaten.
+    - **Beispiel:** `RecipeParser.hh` (wandelt JSON in ein `Recipe`-Domain-Objekt um).
+    - **FEHLEND:** Parser, die DTOs in JSON umwandeln, um sie an die Web-UI zu senden.
+
+---
+
+### 🔴 **PRESENTATION** - Der Einstiegspunkt
+*Die äußerste Schicht. Nimmt Anfragen von außen entgegen und delegiert sie an die passenden Use Cases im Application-Layer.*
+
+- **`presentation/controllers`**:
+    - **Zweck:** Dient als Fassade für das gesamte Recipe Management System. Nimmt Aufrufe entgegen und reicht sie an die `application`-Schicht weiter.
+    - **Beispiel:** `RecipeController.hh`.
+    - **WICHTIG:** Der `RecipeController` sollte "dünn" sein. Er enthält keine Geschäftslogik, sondern delegiert nur.
+
+---
+
+## ⚙️ 4. Einbindung in das bestehende System (`main.cc` & `devicemanager.cc`)
+
+1.  **Initialisierung (im `DeviceManager`):**
+    - Der `DeviceManager` erstellt eine Instanz des `RecipeController`.
+    - Beim Erstellen des `RecipeController` wird die gesamte Abhängigkeitskette aufgebaut (Dependency Injection):
+        - `RecipeController` bekommt Use Cases.
+        - Use Cases bekommen Interface-Implementierungen (z.B. `LittleFSRecipeStorage`, `WebSocketLiveViewGateway`).
+        - Die `WebSocket...`-Gateways bekommen das `webmanager::iWebmanagerCallback`-Objekt, um Nachrichten senden zu können.
+
+2.  **Eingehende Befehle (Request Flow):**
+    - Ein WebSocket-Befehl kommt im `functionblock_plugin.hh` (oder einem neuen `recipe_plugin.hh`) an.
+    - Das Plugin parst die Nachricht (z.B. Flatbuffers).
+    - Das Plugin ruft eine Methode auf dem `DeviceManager` auf: `devicemanager->startRecipe("MyRecipe")`.
+    - Der `DeviceManager` delegiert den Aufruf an seine `RecipeController`-Instanz: `m_recipeController->startRecipe("MyRecipe")`.
+    - Der `RecipeController` ruft den entsprechenden Use Case auf: `m_executeRecipeUseCase->execute("MyRecipe")`.
+    - Der Use Case führt die Logik aus.
+
+3.  **Ausgehende Nachrichten (Response/Event Flow):**
+    - Die `RecipeEngine` ändert ihren Zustand (z.B. "Step 3 gestartet").
+    - Sie publiziert ein Domain-Event.
+    - Der `RecipeExecutionManager` (ein Application Service) fängt das Event ab.
+    - Der Manager erstellt ein `LiveViewDto`.
+    - Er ruft das `ILiveViewGateway`-Interface auf: `m_liveViewGateway->sendUpdate(dto)`.
+    - Die Implementierung `WebSocketLiveViewGateway` wandelt das DTO in JSON um und sendet es über das `webmanager`-Callback an die Web-UI.
+
+4.  **Periodische Ausführung (`tick`):**
+    - Die `DeviceManager::Loop()`-Methode ruft periodisch `m_recipeController->tick(deltaMs)`.
+    - Der `RecipeController` leitet den Aufruf an die `RecipeEngine` weiter: `m_recipeEngine->tick(deltaMs)`.
+    - Die `RecipeEngine` prüft Timer, wertet Bedingungen aus und wechselt bei Bedarf den Step.
