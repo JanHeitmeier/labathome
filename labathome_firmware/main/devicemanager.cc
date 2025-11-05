@@ -11,6 +11,14 @@
 #include "esp_vfs.h"
 #include "modbus.hh"
 
+#include "recipemanagement/infrastructure/engine/IoResourceManager.hh"
+#include "recipemanagement/infrastructure/engine/StepTypeRegistry.hh"
+#include "recipemanagement/infrastructure/engine/RecipeEngine.hh"
+#include "recipemanagement/application/services/RecipeApplicationService.hh"
+#include "recipemanagement/infrastructure/serialization/JsonSerialization.hh"
+#include "recipemanagement/application/dtos/CommandDto.hh"
+#include "example_implementations/recipemanagement/storage/RecipeStorage_impl.cc"
+
 constexpr uint32_t TRIGGER_FALLBACK_TIME_MS{10000};
 constexpr size_t FILE_PATH_MAX =ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN;
 
@@ -27,6 +35,14 @@ DeviceManager::DeviceManager(iHAL *hal):hal(hal)
     currentExecutable = this->createDummyInitialExecutableAndEnqueue();
     nextExecutable = nullptr;
     heaterPIDController = new PID::Controller<float>(&actualTemperature, &setpointHeater, &setpointTemperature, 0, 100, PID::Mode::OFF, PID::AntiWindup::ON_LIMIT_INTEGRATOR, PID::Direction::DIRECT, 1000);
+    
+    ESP_LOGI(TAG, "Initializing Recipe Management Framework");
+    IoResourceManager::instance().init(hal);
+    StepTypeRegistry::instance().init();
+    m_recipeStorage = new RecipeStorageImpl();
+    m_recipeEngine = new RecipeEngine();
+    m_recipeService = new RecipeApplicationService(m_recipeStorage, m_recipeEngine, nullptr);
+    ESP_LOGI(TAG, "Recipe Management Framework initialized");
 }
 
 ErrorCode DeviceManager::InitAndRun()
@@ -496,13 +512,18 @@ ErrorCode DeviceManager::CheckForNewExecutable()
 
 ErrorCode DeviceManager::Loop()
 {
-    static uint32_t lastLogMs = 0;
+    static uint32_t lastLoopMs = 0;
     uint32_t now = hal->GetMillis();
-    if (lastLogMs == 0) lastLogMs = now;
-    if ((uint32_t)(now - lastLogMs) >= 1000u) {
-        ESP_LOGI(TAG, "loop");
-        lastLogMs = now;
+    
+    if (lastLoopMs == 0) lastLoopMs = now;
+    
+    uint32_t deltaMs = now - lastLoopMs;
+    lastLoopMs = now;
+    
+    if (m_recipeEngine) {
+        m_recipeEngine->tick(deltaMs);
     }
+    
     
     return ErrorCode::OK;
 }
@@ -539,5 +560,30 @@ ErrorCode DeviceManager::TriggerHeaterExperiment(const heaterexperiment::Request
         )
     );
     return ErrorCode::OK;
+}
+
+void DeviceManager::HandleRecipeCommand(const std::string& json) {
+    if (!m_recipeService) {
+        ESP_LOGE(TAG, "RecipeApplicationService not initialized");
+        return;
+    }
+    
+    CommandDto dto;
+    if (!JsonSerialization::deserialize(json, dto)) {
+        ESP_LOGE(TAG, "Failed to deserialize command");
+        return;
+    }
+    
+    m_recipeService->handleCommand(dto);
+}
+
+void DeviceManager::SetMessageGateway(IMessageGateway* gateway) {
+    if (!m_recipeService) {
+        ESP_LOGE(TAG, "RecipeApplicationService not initialized");
+        return;
+    }
+    
+    m_recipeService->setMessageGateway(gateway);
+    ESP_LOGI(TAG, "Message Gateway connected");
 }
 

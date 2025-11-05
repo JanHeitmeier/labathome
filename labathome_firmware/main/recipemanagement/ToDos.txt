@@ -8,16 +8,22 @@ Dieses Dokument beschreibt die notwendigen Schritte zur Implementierung des Reci
 
 **Ziel:** Die grundlegenden Verträge (Interfaces) und Werkzeuge für die Kommunikation definieren.
 
-- **1.1: RapidJSON-Bibliothek integrieren**
-  - Die RapidJSON-Header-Dateien als Komponente in das ESP-IDF-Projekt einbinden.
-  - Sicherstellen, dass die Header im `recipemanagement`-Code includiert werden können.
+- Abgeschlossen! **1.1: RapidJSON als Header-Datei einbinden**
+  - **Architektur-Entscheidung:** RapidJSON wird NICHT als ESP-IDF-Komponente integriert, sondern als einzelne Header-Datei direkt in das `recipemanagement`-Framework eingebunden.
+  - Die benötigten RapidJSON-Header (aus dem `include/rapidjson/`-Verzeichnis des Downloads) in ein neues Verzeichnis `main/recipemanagement/infrastructure/third_party/rapidjson/` kopieren.
+  - **Vorteil:** Das Framework bleibt vollständig selbstständig und hat keine externen Komponenten-Abhängigkeiten außerhalb des `recipemanagement`-Verzeichnisses.
+  - Sicherstellen, dass die Header mit relativem Pfad includiert werden können (z.B. `#include "../third_party/rapidjson/document.h"`).
 
-- **1.2: Zentrale JSON-Serialisierungs-Klasse implementieren**
-  - Eine dedizierte Klasse `JsonSerialization.hh`/`.cc` im `example_implementations/recipemanagement/infrastructure/` Verzeichnis erstellen.
-  - Die Klasse bietet statische Methoden zur (De-)Serialisierung für jeden DTO-Typ (z.B. `serialize(const LiveViewDto& dto)`).
-  - Intern wird RapidJSON genutzt. Die DTOs selbst bleiben frei von JSON-Abhängigkeiten.
+- Teilweise abgeschlossen! **1.2: Zentrale JSON-Serialisierungs-Klasse implementieren**
+  - **Architektur-Entscheidung:** Da die `JsonSerialization`-Klasse nur RapidJSON (bereits im Framework) und Standard-C++ verwendet, ist sie **framework-intern** und gehört NICHT in `example_implementations`.
+  - Eine dedizierte Klasse `JsonSerialization.hh`/`.cc` im `main/recipemanagement/infrastructure/serialization/` Verzeichnis erstellen.
+  - Die Klasse bietet statische Methoden zur (De-)Serialisierung für jeden DTO-Typ (z.B. `static std::string serialize(const LiveViewDto& dto)` und `static bool deserialize(const std::string& json, CommandDto& outDto)`).
+  - Intern werden die RapidJSON-Header mit relativem Pfad includiert (z.B. `#include "../third_party/rapidjson/document.h"`). Die DTOs selbst bleiben frei von JSON-Abhängigkeiten ("Plain Old Data").
+  - **Vorteil:** Die Serialisierung ist komplett plattformunabhängig und kann direkt im Framework wiederverwendet werden.
+  - **Implementierungshinweis:** Für die Serialisierung die `rapidjson::StringBuffer` und `rapidjson::Writer` verwenden. Für die Deserialisierung die `rapidjson::Document` API nutzen (DOM-basiert ist hier akzeptabel, da die DTOs klein sind).
+  - **Status:** Klassen-Struktur (`.hh` und `.cc`) existiert, aber Methoden-Bodies sind noch leer (nur TODO-Kommentare).
 
-- **1.3: `IMessageGateway`-Interface für ausgehende Nachrichten definieren**
+- Abgeschlossen! **1.3: `IMessageGateway`-Interface für ausgehende Nachrichten definieren**
   - Ein Interface `IMessageGateway.hh` im `core/interfaces/messaging`-Verzeichnis erstellen.
   - Dieses Interface deklariert überladene, rein virtuelle `send`-Methoden für jeden ausgehenden DTO-Typ (z.B. `virtual void send(const LiveViewDto& dto) = 0;`).
   - **Zweck:** Dient als Rückkanal für den `RecipeApplicationService`, um Nachrichten an die UI zu senden, ohne die konkrete Implementierung (WebSocket) zu kennen.
@@ -28,18 +34,25 @@ Dieses Dokument beschreibt die notwendigen Schritte zur Implementierung des Reci
 
 **Ziel:** Die Kernlogik im `DeviceManager` kapseln und die Schnittstellen nach außen definieren.
 
-- **2.1: `RecipeApplicationService`-Klasse erstellen**
-  - Dies ist die zentrale Logik-Einheit ("Gehirn"). Die Klasse `RecipeApplicationService.hh`/`.cc` im `application`-Verzeichnis erstellen.
+- Abgeschlossen! **2.1: `RecipeApplicationService`-Klasse erstellen**
+  - Dies ist die zentrale Logik-Einheit ("Gehirn"). Die Klasse `RecipeApplicationService.hh`/`.cc` im `application/services/` erstellt.
   - **Abhängigkeiten:** Benötigt Referenzen auf den `IRecipeStorage`, die `RecipeEngine` und den `IMessageGateway` (für den Rückkanal).
   - **Aufgaben:** Nimmt `CommandDto`-Objekte entgegen, steuert die `RecipeEngine`, lädt/speichert Rezepte und sendet Status-Updates über den `IMessageGateway`.
+  - **Status:** Header und Implementation fertig, alle Command-Handler implementiert (mit TODOs für Engine-Integration).
+  - **Besonderheit:** `handleGetAvailableSteps()` nutzt `StepTypeRegistry::availableTypesAsDto()` für direktes DTO-Mapping.
 
-- **2.2: `DeviceManager` erweitern**
-  - **Kapselung:** Der `DeviceManager` wird die Instanzen des `RecipeApplicationService`, `RecipeStorage` und der `RecipeEngine` als private Member halten und deren Lebenszyklus verwalten.
-  - **Methode für eingehende Befehle:** Eine öffentliche Methode `void HandleRecipeCommand(const std::string& json)` zum `DeviceManager` hinzufügen. Diese Methode deserialisiert den JSON-String und leitet den Befehl an den `RecipeApplicationService` weiter.
-  - **Methode für den Rückkanal:** Eine öffentliche Methode `void SetMessageGateway(IMessageGateway* gateway)` zum `DeviceManager` hinzufügen. Diese wird von `main.cc` aufgerufen, um dem `RecipeApplicationService` den Kommunikationskanal zur Verfügung zu stellen.
+- Abgeschlossen! **2.2: `DeviceManager` erweitern**
+  - **Kapselung:** Der `DeviceManager` hält die Instanzen des `RecipeApplicationService`, `RecipeStorage` und der `RecipeEngine` als private Member und verwaltet deren Lebenszyklus.
+  - **Methode für eingehende Befehle:** `void HandleRecipeCommand(const std::string& json)` hinzugefügt. Deserialisiert JSON und leitet an `RecipeApplicationService` weiter.
+  - **Methode für den Rückkanal:** `void SetMessageGateway(IMessageGateway* gateway)` hinzugefügt. Wird von `main.cc` aufgerufen.
 
-- **2.3: Initialisierungslogik im `DeviceManager` implementieren**
-  - Im Konstruktor oder in der `InitAndRun`-Methode des `DeviceManager` werden die `RecipeStorage`-Implementierung, die `RecipeEngine` und der `RecipeApplicationService` instanziiert und miteinander verknüpft.
+- Abgeschlossen! **2.3: Initialisierungslogik im `DeviceManager` implementieren**
+  - Im Konstruktor werden initialisiert:
+    - `IoResourceManager::instance().init(hal)`
+    - `StepTypeRegistry::instance().init()`
+    - `m_recipeStorage = new RecipeStorageImpl()` (nutzt bereits gemountetes LittleFS)
+    - `m_recipeEngine = new RecipeEngine()`
+    - `m_recipeService = new RecipeApplicationService(...)`
 
 ---
 
@@ -47,18 +60,19 @@ Dieses Dokument beschreibt die notwendigen Schritte zur Implementierung des Reci
 
 **Ziel:** Die Brücke von der `main.cc` zur gekapselten Logik im `DeviceManager` schlagen.
 
-- **3.1: `RecipeManagementPlugin`-Klasse implementieren**
+- Abgeschlossen! **3.1: `RecipeManagementPlugin`-Klasse implementieren**
   - Eine "dumme" Plugin-Klasse `RecipeManagementPlugin.hh`/`.cc` im `webmanager_plugins`-Verzeichnis erstellen.
   - **Implementiert `IMessageGateway`:** Die Klasse erbt von `webmanager::iWebmanagerPlugin` UND implementiert das `IMessageGateway`-Interface aus Schritt 1.3. Die `send`-Methoden nutzen den `iWebmanagerCallback`, um die serialisierten DTOs tatsächlich zu versenden.
   - **Abhängigkeit:** Erhält im Konstruktor nur eine Referenz auf den `DeviceManager`.
   - **Implementierung:** Die `ProvideWebsocketMessage`-Methode ruft lediglich `deviceManager->HandleRecipeCommand(json)` auf.
+  - **Status:** Klasse existiert in `example_implementations/webmanager_plugins/`, implementiert `IMessageGateway` und `iWebmanagerPlugin`.
 
-- **3.2: Verdrahtung in `main.cc` anpassen**
-  - In `app_main()` in `main.cc` die finale Verknüpfung durchführen:
-    1. `DeviceManager` instanziieren.
-    2. `RecipeManagementPlugin` instanziieren und ihm den `DeviceManager`-Zeiger übergeben.
-    3. `deviceManager->SetMessageGateway(plugin);` aufrufen, um den Rückkanal zu etablieren.
-    4. Das neue Plugin zur `plugins`-Vektorliste hinzufügen.
+- Abgeschlossen! **3.2: Verdrahtung in `main.cc` anpassen**
+  - In `app_main()` die finale Verknüpfung durchgeführt:
+    1. `DeviceManager` instanziiert (initialisiert automatisch Recipe Management im Konstruktor).
+    2. `RecipeManagementPlugin` instanziiert mit `DeviceManager`-Zeiger.
+    3. `deviceManager->SetMessageGateway(plugins[4])` aufgerufen nach `wm->Begin()`.
+    4. Plugin zur `plugins`-Vektorliste hinzugefügt.
 
 ---
 
@@ -66,20 +80,39 @@ Dieses Dokument beschreibt die notwendigen Schritte zur Implementierung des Reci
 
 **Ziel:** Die Logik zur Abarbeitung von Rezepten implementieren.
 
-- **4.1: `RecipeEngine`-Klasse als FreeRTOS-Task entwerfen**
-  - **Architektur-Entscheidung:** Die `RecipeEngine` wird in einem eigenen, dedizierten FreeRTOS-Task ausgeführt, um eine saubere Trennung und robustes Zeitverhalten zu gewährleisten.
-  - **Task-Erstellung:** Die `RecipeEngine` erhält eine `Start()`-Methode, die den Task erstellt und startet. Diese wird vom `DeviceManager` aufgerufen.
-  - **Task-Schleife:** Die Hauptlogik befindet sich in einer `while(true)`-Schleife innerhalb des Tasks. Diese Schleife ist für die Abarbeitung des aktiven Rezepts zuständig.
-  - **Zustandsverwaltung:** Die Engine verwaltet den Zustand des Rezepts (z.B. `IDLE`, `RUNNING`, `PAUSED`) und den Index des aktuellen Schritts.
-  - **Schritt-Abarbeitung:** Innerhalb der Schleife werden die `onActivating`, `onActive`, `onDeactivating`-Methoden des jeweils aktiven `IStep`-Objekts aufgerufen. Zeitverzögerungen innerhalb eines Schritts können einfach mit `vTaskDelay()` realisiert werden.
-  - **Befehls-Queue:** Zur Kommunikation vom `RecipeApplicationService` zur `RecipeEngine` wird eine FreeRTOS-Queue verwendet. Befehle wie "Start", "Stop", "Pause" werden als Nachrichten in diese Queue gelegt, um Race Conditions zu vermeiden.
-  - **Status-Updates:** Die Engine sendet regelmäßig Status-Updates (z.B. `LiveViewDto`) über den `IMessageGateway` an die UI. Der Zugriff auf geteilte Daten zwischen dem Engine-Task und anderen Tasks (z.B. dem Webserver-Task) muss bei Bedarf mit Mutexes geschützt werden.
+- Abgeschlossen! **4.1: `RecipeEngine`-Klasse implementieren**
+  - **Architektur-Entscheidung:** Die `RecipeEngine` bleibt plattformunabhängig und wird wie FunctionBlocks im DeviceManager Loop mit `tick()` aufgerufen. Keine FreeRTOS-spezifischen Dependencies.
+  - **Polling-basiert:** Die Engine hat eine `tick(deltaMs)`-Methode, die periodisch aufgerufen wird (z.B. alle 50ms aus dem DeviceManager Loop).
+  - **Zustandsverwaltung:** Die Engine verwaltet den Zustand (Idle/Loaded/Running/Paused/Error) mit `std::atomic<RecipeEngineState>`.
+  - **Schritt-Abarbeitung:** In `tick()` wird `onActive()` des aktuellen Steps aufgerufen. Die Transition erfolgt über `isTransitionConditionMet()` (inspiriert von MicroSFC).
+  - **Lifecycle:** `onActivating()` beim Laden, `onActive()` bei jedem Tick, `onDeactivating()` beim Wechsel/Stop.
+  - **Befehle:** Direkte Methodenaufrufe (start/pause/resume/stop) - keine Queues nötig.
+  - **Integration:** DeviceManager ruft `m_recipeEngine->tick(deltaMs)` im Loop auf.
+  - **Timer:** Über StepContext (startTimer/stopTimer/isTimerExpired) - besser als MicroSFC's separate Timer-Klassen.
+  - **Status:** Vollständig implementiert mit loadRecipe(), start(), pause(), resume(), stop(), tick(), Getter-Methoden.
 
 - **4.2: IO-Mapping mittels `IoResourceManager` finalisieren**
   - **Architektur-Bestätigung:** Das IO-Mapping wird über den bestehenden `IoResourceManager` (Singleton) realisiert. Dieser agiert als zentrale Registry für alle `IInput`- und `IOutput`-Instanzen.
   - **Initialisierung:** Der `IoResourceManager` wird, wie bereits implementiert, im Konstruktor des `RecipeApplicationService` über `IoResourceManager::instance().init(hal)` initialisiert.
   - **Verwendung in der `RecipeEngine`:** Wenn die `RecipeEngine` einen Schritt ausführt, verwendet sie den `IoResourceManager`, um die benötigten IO-Zeiger aufzulösen (z.B. `IoResourceManager::instance().resolveOutput("Fan")`). Diese Zeiger werden dann dem `StepContext` des Schritts übergeben.
   - **Aufgabe:** Sicherstellen, dass alle für die Rezepte benötigten `IInput`- und `IOutput`-Implementierungen in der `IoResourceManager::init()`-Methode registriert werden.
+  - **Status:** Architektur fertig, `init()` in `example_implementations/recipemanagement/init/InitIos.cc` implementiert, muss noch getestet werden.
+
+---
+
+### Zusätzlich abgeschlossen (nicht ursprünglich in TODO):
+
+- Abgeschlossen! **DTOs erstellt/erweitert:** Alle 6 DTOs (CommandDto, LiveViewDto, AvailableStepsDto, AvailableRecipesDto, RecipeDto, MetricsDto) mit vollständigen Feldern.
+
+- Abgeschlossen! **StepTypeRegistry umgebaut:** 3-Schichten-Architektur implementiert (Framework/Glue/Implementations).
+  - Framework: `StepTypeRegistry.hh/cc` mit `registerStepType()`, `availableTypes()`, `createInstance()`.
+  - Init-Datei: `example_implementations/recipemanagement/init/InitSteps.cc` implementiert `init()`.
+
+- Abgeschlossen! **IoResourceManager umgebaut:** `init()`-Methode ausgelagert nach `example_implementations/recipemanagement/init/InitIos.cc`.
+
+- Abgeschlossen! **CMake-Struktur:** Recipe Management als eigenständige ESP-IDF Komponente in `EXTRA_COMPONENT_DIRS`.
+
+- Abgeschlossen! **Include-Pfade korrigiert:** Alle Dateien in `example_implementations/` verwenden korrekte relative Pfade zum Framework.
 
 ---
 
@@ -117,3 +150,193 @@ Dieses Dokument beschreibt die notwendigen Schritte zur Implementierung des Reci
   - **Aufgabe:** Detaillierte Anzeige von historischen oder Echtzeit-Messwerten.
   - Einen dedizierten `MetricsDto`-Nachrichtenstrom abonnieren.
   - Die empfangenen Daten in Graphen (z.B. mit Chart.js) oder Tabellen darstellen.
+
+
+
+
+
+Typischer Ablauf der Prozesse (Beispielhaft erklärt.): 
+Also ein entwickler bekommt mein Framework und implementiert das für seine spezifische maschine, 
+er bindet den storage teil und communcaiton teil an, er implementiert den start des rezeptmanagers. 
+Ebenfalls weis er was man mit der maschine machen kann und biundet die ein und ausgänge an, dann weis 
+er welche Werte er handhaben muss und imllementiert die Value klassen. Dann nimmt er seine beiden 
+implementierten I/O und Values und baut daraus schritte. jeder schritt den er erzugt wird auch vom 
+interface IStep abgeleitet und diese Steps registrieren sich nach Programm start in der StepTypeRegistry
+ (hier kontrollieren ob das schon der fall ist oder was gemacht werden muss). die IO ist über 
+ den IO Resourcemanager verfügbar. 
+Ebenfalls implementiert er die Webansicht auf der Webdarstellung der Maschine, ob das lokal läuft oder 
+überwelan aufgerufen wird sollte egal sein, da die kommunikations schnittestelle ebenfalls von dem Entwickler 
+umgesetzt wird. 
+Jetzt ist alles eingericht. 
+Wenn jetzt jemand die maschine startet und sich auf die Webseite einlogged, dann kann man da den Rezept editor öffnen. 
+Im rezept editor sollen alle vom Entwickelr erstellten schritte mit ihren Beschreibungen und Parametern aufgeführt 
+sein(das ist glaube ich das availableStepsDto) . Dort kann man dann die Paramter zu dem gewünschten ändern. 
+Mann kann nun mehrere Schritte hintereinander anreihen und wenn dies fertig ist, dann wird das ganze in ein 
+Json format gebracht und vom browser an die Platine geschickt. auf der Platine wird das dann über das kommunikations 
+gateway angenommen, und in einen Json speicherort hinterlegt mit einer RezeptID, dann mit dem JsonSerilization 
+desirializert, dann wird das DTO Objekt das jetzt als struct vorliegen sollte in ein Recipe Objekt umgebaut und 
+dieses Recipe objekt soll dann abgepsichert werden(serializiert, damit man das nciht aus der json neu bauen muss 
+wenn man es das nächste mal ausführen will.).
+Auf der webseite kann man nun auf die start sete gehen und ein rezept zum starten aussuchen, dabei wird kontrolliert 
+ob man die passenden credentials dafür hat (Zugriffskontrolle wird im nachhinein hinzugefügt (ist kein zentraler 
+wichtiger punkt erstmal und spielt mehr ne rolle in dem typescript) ), dann kann ein Rezept gestartet werden 
+(dafür werden die verfügbaren rezepte mit ihren Beschreibungen von der webseite eingeholt mit dem availableRecipesDto),
+ diese werden dem nutzter päsentiert (die haben ihre werte und alles von dem Rezept Editor ausgefüllt.) 
+ und dann kann das Rezept gestartet werden. 
+Wenn das Rezept gestartet wurde dann gibt es das command mit dem CommandDTO an die platine (für vorherige 
+befehle von der Webseite, die nicht die daten umfasst, wurde ebenfalls commandDTO verwendet. ), dieser 
+Command enthält die auszuführende recipeID. dann wird das gewähle Rezept ausgeführt. Während der ausführung 
+sollen Live-Daten an die Webseite geschickt werden, auf der Webseite soll es auch Buttons geben zum kontrollieren. 
+Bei der LiveAnsicht muss noch viel gemacht werden, dashalb betrachten wir erstmal den Prozess, der bis dahin geht. 
+(Bei Liveansicht sollen auch daten von eingängen die als senoren markiert wurde, angezeigt werden, es gibt pause und 
+Stop buttons und Continue, es gibt einen button für das quittieren vo nanweisungen (z.B. lässt der schritt einen motor 
+für 6 sek. laufen udn fordert dann den benutzter auf einne behälter zu leeren, der user muss das quittieren können und 
+das Programm muss auf ihn warten, aber dem Benutzter muss auch zum richtigen Zeitpunkt angezigtwerden "Behälter leeren",
+ diese anweisungen fehlen momentan noch im Step))
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          MAIN.CC (ESP32 Boot)                           │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ 1. System Init
+                                    ▼
+        ┌───────────────────────────────────────────────────┐
+        │  HAL Init (iHAL* hal = new HAL_Impl())            │
+        │  - GPIO, I2C, SPI, Sensoren                       │
+        └───────────────────────────────────────────────────┘
+                                    │
+                                    │ 2. Filesystem Init
+                                    ▼
+        ┌───────────────────────────────────────────────────┐
+        │  LittleFS Mount (/spiffs)                         │
+        │  - esp_vfs_littlefs_register()                    │
+        │  - Verzeichnisse: /spiffs/recipes_json/           │
+        │                   /spiffs/recipes_bin/            │
+        └───────────────────────────────────────────────────┘
+                                    │
+                                    │ 3. DeviceManager Init
+                                    ▼
+        ┌───────────────────────────────────────────────────┐
+        │  DeviceManager *dm = new DeviceManager(hal)       │
+        │  Konstruktor:                                     │
+        │    - Speichert hal-Zeiger                         │
+        │    - Erstellt PID-Controller                      │
+        │    - Erstellt Dummy-Executable                    │
+        └───────────────────────────────────────────────────┘
+                                    │
+                                    │ 4. WebManager Plugins
+                                    ▼
+        ┌───────────────────────────────────────────────────┐
+        │  std::vector<iWebmanagerPlugin*> plugins          │
+        │    - HeaterExperimentPlugin                       │
+        │    - FunctionblockPlugin                          │
+        │    - SystemInfoPlugin                             │
+        │    - UsersettingsPlugin                           │
+        │    ┌──────────────────────────────────────────┐   │
+        │    │ RecipeManagementPlugin (NEU!)            │   │
+        │    │   - Benötigt RecipeApplicationService*   │   │
+        │    └──────────────────────────────────────────┘   │
+        └───────────────────────────────────────────────────┘
+                                    │
+                                    │ 5. HTTPS Server Start
+                                    ▼
+        ┌───────────────────────────────────────────────────┐
+        │  httpd_ssl_start(&http_server, &config)           │
+        │  wm->RegisterHTTPDHandlers(http_server)           │
+        └───────────────────────────────────────────────────┘
+                                    │
+                                    │ 6. Manager Start
+                                    ▼
+        ┌───────────────────────────────────────────────────┐
+        │  hal->InitAndRun()                                │
+        │  devicemanager->InitAndRun()                      │
+        │    → xTaskCreate(...EternalLoop...)               │
+        └───────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DeviceManager::DeviceManager(hal)                    │
+│                         (Konstruktor erweitern)                         │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌──────────────┐          ┌─────────────────┐         ┌──────────────────┐
+│ Bestehende   │          │  Recipe Mgmt    │         │  Recipe Mgmt     │
+│ Init-Logik   │          │  Registries     │         │  Services        │
+│              │          │                 │         │                  │
+│ - PID        │          │ 1. IoResource   │         │ 1. Storage Impl  │
+│ - Executable │          │    Manager      │         │                  │
+└──────────────┘          │    ::init(hal)  │         │ 2. RecipeEngine  │
+                          │                 │         │                  │
+                          │ 2. StepType     │         │ 3. Application   │
+                          │    Registry     │         │    Service       │
+                          │    ::init()     │         │                  │
+                          └─────────────────┘         └──────────────────┘
+                                    │                           │
+                                    └───────────┬───────────────┘
+                                                │
+                                                ▼
+                    ┌─────────────────────────────────────────┐
+                    │  DeviceManager hat jetzt:               │
+                    │    - m_recipeStorage (IRecipeStorage*)  │
+                    │    - m_recipeEngine (RecipeEngine*)     │
+                    │    - m_recipeService (Application*)     │
+                    └─────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND (TypeScript)                           │
+│  WebSocket sendet: {"command": "start_recipe", "recipeId": "abc123"}    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ JSON über WebSocket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│           RecipeManagementPlugin (iWebmanagerPlugin)                    │
+│  void ProvideWebsocketMessage(const std::string& json)                  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ Weiterleitung
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DeviceManager::HandleRecipeCommand(json) ◄─── NEU!   │
+│  1. JsonSerialization::deserialize(json, commandDto)                    │
+│  2. m_recipeService->handleCommand(commandDto)                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ Delegierung
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│           RecipeApplicationService::handleCommand(dto)                  │
+│  Switch(dto.command):                                                   │
+│    case "start_recipe"    → handleStartRecipe(dto.recipeId)             │
+│    case "save_recipe"     → handleSaveRecipe(dto.payload)               │
+│    case "get_recipe_list" → handleGetRecipeList()                       │
+│    case "get_available_steps" → handleGetAvailableSteps()               │
+└─────────────────────────────────────────────────────────────────────────┘
+        │                   │                    │                  │
+        ▼                   ▼                    ▼                  ▼
+┌─────────────┐   ┌──────────────┐   ┌────────────────┐   ┌──────────────┐
+│ RecipeEngine│   │IRecipeStorage│   │StepTypeRegistry│   │ IMessage     │
+│             │   │              │   │                │   │ Gateway      │
+│ .start()    │   │.loadRecipe() │   │ .availableTypes│   │ .send(dto)   │
+│ .stop()     │   │.saveRecipe() │   │ AsDto()        │   │              │
+│ .pause()    │   │ .deleteRecipe│   │                │   │              │
+└─────────────┘   └──────────────┘   └────────────────┘   └──────────────┘
+                          │                                        │
+                          │                                        │
+                          ▼                                        ▼
+                ┌──────────────────┐               ┌──────────────────────┐
+                │ LittleFS         │               │ RecipeManagement     │
+                │ /spiffs/recipes  │               │ Plugin               │
+                │ _json/           │               │ .send() →            │
+                │ recipe_001.json  │               │ WrapAndSendAsync()   │
+                └──────────────────┘               └──────────────────────┘
+                                                              │
+                                                              ▼
+                                                    ┌──────────────────┐
+                                                    │ WebSocket        │
+                                                    │ → Frontend       │
+                                                    └──────────────────┘                  

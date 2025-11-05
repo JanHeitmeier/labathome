@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../espidf-components"
+		},
+		{
+			"path": "../microsfc-master"
 		}
 	],
 	"settings": {

@@ -27,4 +27,7 @@ public:
     virtual bool exists(uint32_t id) = 0;
     // Liefert alle bekannten IDs
     virtual std::vector<uint32_t> listIds() = 0;
+    // JSON convenience methods
+    virtual bool saveJson(uint32_t id, const std::string& json) = 0;
+    virtual std::optional<std::string> getJson(uint32_t id) = 0;
 };

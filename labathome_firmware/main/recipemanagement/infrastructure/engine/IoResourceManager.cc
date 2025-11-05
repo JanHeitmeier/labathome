@@ -1,6 +1,4 @@
 #include "IoResourceManager.hh"
-#include "../implementations/Io_impl.cc"  // Include für Implementierungen
-#include "../../devicemanager.hh"  // Für iHAL
 
 IoResourceManager& IoResourceManager::instance() {
     static IoResourceManager r;
@@ -10,15 +8,9 @@ IoResourceManager& IoResourceManager::instance() {
 IoResourceManager::IoResourceManager() {
 }
 
-void IoResourceManager::init(iHAL* hal) {
-    // Registriere alle bekannten Inputs mit der übergebenen HAL
-    registerInput("GreenButton", std::make_shared<GreenButtonInput>(hal));
-    registerInput("RedButton", std::make_shared<RedButtonInput>(hal));
-    // Füge weitere Inputs hinzu, z. B. registerInput("TempSensor", std::make_shared<TempSensorInput>(hal));
-
-    // Registriere alle bekannten Outputs
-    // Beispiel: registerOutput("Heater", std::make_shared<HeaterOutput>(hal));
-}
+// HINWEIS: init() wird ABSICHTLICH NICHT hier implementiert!
+// Diese Methode muss vom Entwickler in example_implementations/recipemanagement/init/InitIos.cc
+// implementiert werden. Wenn sie fehlt, gibt der Linker einen Fehler aus.
 
 void IoResourceManager::registerInput(const std::string& name, std::shared_ptr<IInput> in) {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -38,5 +30,6 @@ std::shared_ptr<IInput> IoResourceManager::resolveInput(const std::string& name)
 
 std::shared_ptr<IOutput> IoResourceManager::resolveOutput(const std::string& name) const {
     std::lock_guard<std::mutex> lk(mutex_);
-    auto it = outputs_.end() ? nullptr : it->second;
+    auto it = outputs_.find(name);
+    return it == outputs_.end() ? nullptr : it->second;
 }

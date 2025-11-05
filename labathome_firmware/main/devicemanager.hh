@@ -14,6 +14,11 @@
 #include "flatbuffers/flatbuffers.h"
 #include <flatbuffers_cpp/ns04heaterexperiment_generated.h>
 
+class RecipeApplicationService;
+class IMessageGateway;
+class IRecipeStorage;
+class RecipeEngine;
+
 //see Flowchart.ts -values must be the same
 constexpr const char *FBDSTORE_BASE_DIRECTORY = "/spiffs/fbdstore/";    
 constexpr const char *DEFAULTFBD_FBD_FILEPATH =  "/spiffs/defaultfbd.fbd";
@@ -146,6 +151,10 @@ class DeviceManager:public FBContext
         float setpointHeater=0;
         float setpointVoltageOut=0;
 
+        IRecipeStorage* m_recipeStorage;
+        RecipeEngine* m_recipeEngine;
+        RecipeApplicationService* m_recipeService;
+
         void EternalLoop();
         ErrorCode CheckForNewExecutable();
         ErrorCode Loop();
@@ -181,6 +190,9 @@ class DeviceManager:public FBContext
         ErrorCode InitAndRun();
         ErrorCode TriggerHeaterExperiment(const heaterexperiment::RequestHeater *r, flatbuffers::FlatBufferBuilder &b);
         ErrorCode GetDebugInfoSize(size_t *sizeInBytes);
-        ErrorCode GetDebugInfo(flatbuffers::FlatBufferBuilder& b); 
+        ErrorCode GetDebugInfo(flatbuffers::FlatBufferBuilder& b);
+        
+        void HandleRecipeCommand(const std::string& json);
+        void SetMessageGateway(IMessageGateway* gateway);
 };
 

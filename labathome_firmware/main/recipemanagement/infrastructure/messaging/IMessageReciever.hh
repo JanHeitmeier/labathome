@@ -1,2 +1,0 @@
-// Wird vielleicht nicht gebraucht, wenn die anbindung an das Webmanagerplugin durch funktonen bereitstelle ngeht, muss wahrscheinlich kein Interface sein
-// hier funktionen entwerfen, die aus dem Webplugin gerufen werden können

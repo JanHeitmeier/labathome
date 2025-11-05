@@ -50,6 +50,7 @@ static const char *TAG = "main";
 #include "webmanager_plugins/functionblock_plugin.hh"
 #include "webmanager_plugins/systeminfo_plugin.hh"
 #include "webmanager_plugins/usersettings_plugin.hh"
+#include "example_implementations/webmanager_plugins/RecipeManagementPlugin.hh"
 
 DeviceManager *devicemanager{nullptr};
 httpd_handle_t http_server{nullptr};
@@ -123,11 +124,14 @@ extern "C" void app_main()
     plugins.push_back(new FunctionblockPlugin(devicemanager));
     plugins.push_back(new SystemInfoPlugin(tempHandle));
     plugins.push_back(new UsersettingsPlugin("nvs"));
+    plugins.push_back(new RecipeManagementPlugin(devicemanager));
     
     
     //Configure Network
     webmanager::M* wm = webmanager::M::GetSingleton();
     ESP_ERROR_CHECK(wm->Begin(cfg::HOSTNAME, "labathome", cfg::HOSTNAME, false, &plugins, true));
+    
+    devicemanager->SetMessageGateway(static_cast<IMessageGateway*>(plugins[4]));
 
     const char *hostname = wm->GetHostname();
 #ifdef HTTPS

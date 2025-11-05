@@ -66,3 +66,31 @@ bool StepContext::isTimerExpired(std::string_view id) const {
     auto dur = it->second.second;
     return (std::chrono::steady_clock::now() - start) >= dur;
 }
+
+void StepContext::requestUserAcknowledgment(std::string_view instruction) {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_awaitingAcknowledgment = true;
+    m_acknowledged = false;
+    m_userInstruction = instruction;
+}
+
+bool StepContext::isAwaitingAcknowledgment() const {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_awaitingAcknowledgment;
+}
+
+bool StepContext::isAcknowledged() const {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_acknowledged;
+}
+
+void StepContext::acknowledge() {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_awaitingAcknowledgment = false;
+    m_acknowledged = true;
+}
+
+std::string StepContext::getUserInstruction() const {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_userInstruction;
+}

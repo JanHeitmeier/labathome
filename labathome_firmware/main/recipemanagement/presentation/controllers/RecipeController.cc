@@ -4,12 +4,14 @@
 
 RecipeController::RecipeController(DeviceManager& deviceManager, RecipeStorageManager& storageManager)
     : m_deviceManager(deviceManager), m_storageManager(storageManager), m_engineRunning(false) {
-    // Initialisiere IoResourceManager mit HAL aus DeviceManager
-    auto hal = m_deviceManager.getHal();  // Passe Methode an, falls nötig
-    IoResourceManager::instance().init(hal);
-
+    // WICHTIG: IoResourceManager und StepTypeRegistry werden NICHT hier initialisiert!
+    // Diese Initialisierungen müssen im DeviceManager::init() oder main.cc erfolgen,
+    // BEVOR dieser Controller erstellt wird:
+    //   - IoResourceManager::instance().init(hal)
+    //   - StepTypeRegistry::instance().init()
+    
     // Weitere Initialisierung, z. B. RecipeEngine starten oder Callbacks setzen
-    // Beispiel: m_engine = std::make_unique<RecipeEngine>(...); – füge hinzu, wenn RecipeEngine als Member hinzugefügt wird
+    // Beispiel: m_engine = std::make_unique<RecipeEngine>(...);
 }
 
 RecipeController::~RecipeController() {

@@ -1,13 +1,9 @@
 #pragma once
-#include "../entities/Recipe.hh"
-#include "../interfaces/services/IRecipeStorage.hh"
+#include "../../core/interfaces/storage/IRecipeStorage.hh"
 #include <string>
-#include <memory>
 #include <vector>
 #include <optional>
-#include <mutex>
 #include <cstdint>
-#include <ctime>
 
 // Diese Klasse verwaltet die Dateien und bietet CRUD-Operationen für Rezepte.
 // Sie verwaltet zwei verschiedene Arten von rezepten. 
@@ -15,8 +11,11 @@
 //2. Rezepte in serializierter Form (für die interne Speicherung und das schnelle Laden in die RecipeEngine, WICHTIG = Vermeiden von häufigem Parsen/Kompilieren)
 // Die tatsächliche Speicherung wird durch die Implementation von IRecipeStorage erledigt. (Anbindung an verschiedene Speicherarten möglich)
 class RecipeStorageManager {
+private:
+    IRecipeStorage* m_storage;
 
 public:
+    RecipeStorageManager(IRecipeStorage* storage) : m_storage(storage) {}
     // CRUD for JSON recipes
 
     // Speichert ein neues JSON-Rezept und weist automatisch eine ID zu
