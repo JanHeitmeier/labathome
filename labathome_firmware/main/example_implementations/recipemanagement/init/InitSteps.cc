@@ -1,6 +1,3 @@
-// Initialisierung der StepTypeRegistry mit allen verfügbaren Steps
-// Diese Datei implementiert die init()-Methode, die im Framework deklariert wurde
-
 #include "../../../recipemanagement/infrastructure/engine/StepTypeRegistry.hh"
 #include "../engine/Steps.cc"
 
@@ -16,9 +13,5 @@ void StepTypeRegistry::init() {
     // Registriere alle verfügbaren Steps
     registerStepType(std::make_unique<TwoButtonFanStep>());
     
-    // Weitere Steps können hier hinzugefügt werden:
-    // registerStepType(std::make_unique<WaitStep>());
-    // registerStepType(std::make_unique<TemperatureControlStep>());
-    // registerStepType(std::make_unique<MixingStep>());
-    // ...
+    // Weitere Steps können hier hinzugefügt werden
 }

@@ -3,6 +3,8 @@
 #include "../../infrastructure/engine/StepTypeRegistry.hh"
 #include <ctime>
 
+//ToDos von Ki Claude Sonnect 4.5 generiert
+
 RecipeApplicationService::RecipeApplicationService(
     IRecipeStorage* storage,
     RecipeEngine* engine,
@@ -62,7 +64,7 @@ void RecipeApplicationService::handleCommand(const CommandDto& dto) {
     }
 }
 
-// ========== Command-Handler ==========
+// Command-Handlers
 
 void RecipeApplicationService::handleStartRecipe(const std::string& recipeId) {
     if (!m_engine || !m_storage) return;
@@ -299,8 +301,6 @@ MetricsDto RecipeApplicationService::buildMetricsDto() const {
     
     // Placeholder
     dto.recipeId = "recipe_123";
-    
-    // Beispiel-Serie
     MetricSeriesDto tempSeries;
     tempSeries.name = "Temperature";
     tempSeries.unit = "°C";

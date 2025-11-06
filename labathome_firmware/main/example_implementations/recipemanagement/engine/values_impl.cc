@@ -4,7 +4,7 @@
 
 //implemntierung durch Template nutzung. 
 
-//Definierung einer ID und eines Namens (Unit) für jede Einheitart
+//Definierung einer ID und eines Namens (Unit-Art) für jede Einheitart
 struct CelsiusTag {
     static constexpr UnitId id = 100;
     static constexpr const char* name = "Celsius";
@@ -13,6 +13,13 @@ struct FahrenheitTag {
     static constexpr UnitId id = 101;
     static constexpr const char* name = "Fahrenheit";
 };
+
+//nachgetragen 
+struct BoolTag {
+    static constexpr UnitId id = 103;
+    static constexpr const char* name = "Boolean";
+};
+
 struct RPMTag {
     static constexpr UnitId id = 200;
     static constexpr const char* name = "RPM";
@@ -34,9 +41,9 @@ public:
     using Base = ValueBase<ValueFahrenheit, double, FahrenheitTag>;
     using Base::Base;
 };
-class ValueRPM : public ValueBase<ValueRPM, int64_t, RPMTag> {
+class ValueRPM : public ValueBase<ValueRPM, float, RPMTag> {
 public:
-    using Base = ValueBase<ValueRPM, int64_t, RPMTag>;
+    using Base = ValueBase<ValueRPM, float, RPMTag>;
     using Base::Base;
 };
 class ValueMilliseconds : public ValueBase<ValueMilliseconds, int64_t, MsTag> {
@@ -45,13 +52,7 @@ public:
     using Base::Base;
 };
 
-
-//nachgetragen 
-struct BoolTag {
-    static constexpr UnitId id = 0;
-    static constexpr const char* name = "Boolean";
-};
-
+//nachgetragen
 class ValueBool : public ValueBase<ValueBool, bool, BoolTag> {
 public:
     using Base = ValueBase<ValueBool, bool, BoolTag>;

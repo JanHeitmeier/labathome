@@ -36,6 +36,8 @@ DeviceManager::DeviceManager(iHAL *hal):hal(hal)
     nextExecutable = nullptr;
     heaterPIDController = new PID::Controller<float>(&actualTemperature, &setpointHeater, &setpointTemperature, 0, 100, PID::Mode::OFF, PID::AntiWindup::ON_LIMIT_INTEGRATOR, PID::Direction::DIRECT, 1000);
     
+
+    //Recipemanagement Sektion
     ESP_LOGI(TAG, "Initializing Recipe Management Framework");
     IoResourceManager::instance().init(hal);
     StepTypeRegistry::instance().init();

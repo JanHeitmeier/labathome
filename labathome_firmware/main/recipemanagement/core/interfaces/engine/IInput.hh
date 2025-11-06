@@ -12,5 +12,4 @@ public:
     virtual const char* name() const noexcept = 0;
     virtual ValueKind valueType() const noexcept = 0;
     virtual std::unique_ptr<IValue> read() const = 0;
-    virtual void setCallback(Callback cb) = 0;
 };

@@ -21,7 +21,7 @@ std::string RecipeManagementPlugin::GetPluginName() {
     return "RecipeManagement";
 }
 
-// === IMessageGateway Implementation (Ausgehende Nachrichten) ===
+// IMessageGateway Implementation (Ausgehend)
 
 void RecipeManagementPlugin::send(const LiveViewDto& dto) {
     if (!m_callback) return;

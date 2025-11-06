@@ -85,6 +85,8 @@ public:
     State state() const noexcept override { return state_; }
     void setState(State s) noexcept override { state_ = s; }
 
+
+    //Check auf Nutzbarkeit, neue Obj über Konstruktor erstellen
     std::unique_ptr<IStep> cloneEmpty() const override {
         return std::make_unique<Derived>(static_cast<const Derived&>(*this), true);
     }
@@ -255,6 +257,7 @@ protected:
     AliasPtrList m_aliasPtrs;
 
 private:
+//überschreibt die Refeerenzen in der Param list mit den aktuellen , Hilffunktion die eventuell überflüssig ist. 
     void rebuildParamMap() {
         m_paramMap.clear();
         for (ParamDef* p : m_paramPtrs) {

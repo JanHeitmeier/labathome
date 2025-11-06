@@ -7,10 +7,10 @@
 #include <chrono>
 #include <string_view>
 
+//06.11.2025
 
-
-// ✅ User-Acknowledgment Feature ist implementiert!
-// Beispiel-Usage siehe onActive() und isTransitionConditionMet() unten 
+//eine Möglichkeit schaffen durch zugriff auf die Konstructoren
+//Liste und position in liste definiert die TypeId damit das keine "Magic number" ist.
 
 class TwoButtonFanStep : public StepBase<TwoButtonFanStep> {
 private:
@@ -23,15 +23,18 @@ private:
     IoAliasDef red;
     IoAliasDef fan;
 public:
+//Prototyp in English ist okay, aber mal auf Mehrsprachige Optionen achten, ob/wie das anwendbar ist.
     // Konstruktor übergibt Metadaten an die Basis (StepBase)
     TwoButtonFanStep()
+    //TypeId bei r
         : StepBase(0x0001, "TwoButtonFan", "Wait; if both buttons pressed run fan", "1.1"),
         //Parameter initialisieren
           waitMs(
               "waitMs",
               std::make_unique<ValueFloat>(5000.0f),
-              "Wait Milliseconds",
+              "Wait Milliseconds", //ist stringview hier nützlich damit nur lesbare strings nicht heap alloc machen. 
               "Delay before checking buttons (ms)",
+              //makeUnique kontrollieren, zu viel unötiger syntax, verwirrend für externen Entwickler
               std::optional<std::unique_ptr<IValue>>(std::make_unique<ValueFloat>(0.0f)),
               std::optional<std::unique_ptr<IValue>>(std::make_unique<ValueFloat>(60000.0f))
           ),
@@ -74,13 +77,13 @@ public:
         registerIoAliases({ &green, &red, &fan });
     }
 
-    TwoButtonFanStep(const TwoButtonFanStep& o, bool clearParams)
-        : TwoButtonFanStep(o)
-    {
-        if (clearParams) {
-            clearAllParamValues();
-        }
-    }
+    // TwoButtonFanStep(const TwoButtonFanStep& o, bool clearParams)
+    //     : TwoButtonFanStep(o)
+    // {
+    //     if (clearParams) {
+    //         clearAllParamValues();
+    //     }
+    // }
 
     //Ab hier wird die Step-Logik implementiert
 
@@ -91,6 +94,7 @@ public:
     void onActivating(StepContext& ctx) override {
         auto wait_duration = readParamOrDefault(waitMs, 5000.0f);
         ctx.startTimer("wait", std::chrono::milliseconds(static_cast<int64_t>(wait_duration)));
+        //ctx.startTimer("wait", 5000 ); <-milli
         setState(State::Activating);
         ctx.log("TwoButtonFan: activating");
     }
@@ -135,9 +139,7 @@ public:
                 }
                 ctx.stopTimer("fan");
                 ctx.log("TwoButtonFan: fan finished");
-                
-                // 🎯 USER ACKNOWLEDGMENT FEATURE - Super einfache API!
-                // Engine pausiert automatisch, wartet auf Quittierung
+
                 ctx.requestUserAcknowledgment("Fan cycle complete. Please check the container and confirm.");
             }
         }

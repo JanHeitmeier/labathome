@@ -7,7 +7,8 @@
 #include <string_view>
 #include <string>
 #include "IValue.hh"
-
+//Folgen von Clone entfernen z.B. unique pointer 
+//string ist doch eine akzeptable Option (aber speicher im auge behalten)
 struct ParamDef {
     std::string_view key;
     std::unique_ptr<IValue> value;
