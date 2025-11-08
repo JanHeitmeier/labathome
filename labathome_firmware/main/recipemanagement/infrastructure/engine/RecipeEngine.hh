@@ -1,9 +1,10 @@
 #pragma once 
 
 #include "StepTypeRegistry.hh"
-#include "StepContext.hh"
+#include "../../core/domain/value-objects/StepContext.hh"
+#include "../../core/domain/value-objects/StepInstanceDescriptor.hh"
 #include "IoResourceManager.hh"
-#include "IStep.hh"
+#include "../../core/interfaces/engine/IStep.hh"
 #include <string>
 #include <vector>
 #include <memory>
@@ -11,14 +12,6 @@
 #include <cstdint>
 
 enum class RecipeEngineState { Idle, Loaded, Running, Paused, Error };
-
-struct StepInstanceDescriptor {
-    std::string systemId;
-    uint32_t typeId{0};
-    std::unordered_map<std::string, std::string> params;
-    std::unordered_map<std::string, std::string> aliases;
-    int repeatCount{1};
-};
 
 class RecipeEngine {
 public:
@@ -57,7 +50,7 @@ private:
     std::string m_recipeId;
     std::string m_recipeName;
     std::vector<StepInstanceDescriptor> m_stepDescriptors;
-    std::vector<IStep*> m_stepInstances;
+    std::vector<std::unique_ptr<IStep>> m_stepInstances;
     size_t m_currentStepIndex{0};
     uint32_t m_elapsedMs{0};
     std::string m_errorMessage;

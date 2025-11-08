@@ -1,94 +1,71 @@
 #pragma once
 
 #include <vector>
-#include <memory>
 #include <optional>
 #include <cstdint>
 #include <string_view>
 #include <string>
-#include "IValue.hh"
-//Folgen von Clone entfernen z.B. unique pointer 
-//string ist doch eine akzeptable Option (aber speicher im auge behalten)
+#include "ParameterValue.hh"
+
 struct ParamDef {
-    std::string_view key;
-    std::unique_ptr<IValue> value;
-    std::optional<std::unique_ptr<IValue>> minValue;
-    std::optional<std::unique_ptr<IValue>> maxValue;
-    std::string_view label;
-    std::string_view description;
+    std::string key;
+    ParameterValue value;
+    std::optional<ParameterValue> minValue;
+    std::optional<ParameterValue> maxValue;
+    std::string label;
+    std::string description;
+    std::string unit; // z.B. "°C", "RPM", "ms"
 
-    explicit ParamDef(std::string_view key_,
-                      std::unique_ptr<IValue> value_,
-                      std::string_view label_,
-                      std::string_view description_,
-                      std::optional<std::unique_ptr<IValue>> minValue_ = std::nullopt,
-                      std::optional<std::unique_ptr<IValue>> maxValue_ = std::nullopt)
-        : key(key_), value(std::move(value_)), 
-          minValue(std::move(minValue_)),
-          maxValue(std::move(maxValue_)), 
-          label(label_), description(description_) {}
+    // Konstruktor für einfache Initialisierung (akzeptiert string_view für Flexibilität)
+    explicit ParamDef(std::string_view key,
+                      ParameterValue value,
+                      std::string_view label,
+                      std::string_view description,
+                      std::string unit = "",
+                      std::optional<ParameterValue> minValue = std::nullopt,
+                      std::optional<ParameterValue> maxValue = std::nullopt)
+        : key(key), 
+          value(std::move(value)), 
+          minValue(std::move(minValue)),
+          maxValue(std::move(maxValue)), 
+          label(label), 
+          description(description),
+          unit(std::move(unit)) {}
 
-    ParamDef(const ParamDef& o)
-        : key(o.key),
-          value(o.value ? o.value->clone() : nullptr),
-          minValue(o.minValue && *o.minValue ? std::optional((*o.minValue)->clone()) : std::nullopt),
-          maxValue(o.maxValue && *o.maxValue ? std::optional((*o.maxValue)->clone()) : std::nullopt),
-          label(o.label),
-          description(o.description) {}
-
-    ParamDef& operator=(const ParamDef& o) {
-        if (this != &o) {
-            key = o.key;
-            value = o.value ? o.value->clone() : nullptr;
-            minValue = o.minValue && *o.minValue ? std::optional((*o.minValue)->clone()) : std::nullopt;
-            maxValue = o.maxValue && *o.maxValue ? std::optional((*o.maxValue)->clone()) : std::nullopt;
-            label = o.label;
-            description = o.description;
-        }
-        return *this;
-    }
-
+    // Standard-Kopier- und Move-Operationen sind ausreichend
+    ParamDef(const ParamDef&) = default;
+    ParamDef& operator=(const ParamDef&) = default;
     ParamDef(ParamDef&&) = default;
     ParamDef& operator=(ParamDef&&) = default;
     ParamDef() = delete;
 };
 
 struct IoAliasDef {
-    std::string_view aliasName;
+    std::string aliasName;
     bool isInput;
     bool isOutput;
     bool isSensor;
-    std::optional<std::unique_ptr<IValue>> exampleValue;
+    std::string valueType; // z.B. "bool", "float"
+    std::optional<ParameterValue> exampleValue;
+    std::string physicalName; // Physical resource name (set at runtime from recipe)
 
-    explicit IoAliasDef(std::string_view aliasName_,
-                        bool isInput_,
-                        bool isOutput_,
-                        bool isSensor_,
-                        std::optional<std::unique_ptr<IValue>> exampleValue_ = std::nullopt)
-        : aliasName(aliasName_), 
-          isInput(isInput_), 
-          isOutput(isOutput_), 
-          isSensor(isSensor_),
-          exampleValue(std::move(exampleValue_)) {}
+    explicit IoAliasDef(std::string_view aliasName,
+                        bool isInput,
+                        bool isOutput,
+                        bool isSensor,
+                        std::string valueType = "",
+                        std::optional<ParameterValue> exampleValue = std::nullopt)
+        : aliasName(aliasName), 
+          isInput(isInput), 
+          isOutput(isOutput), 
+          isSensor(isSensor),
+          valueType(std::move(valueType)),
+          exampleValue(std::move(exampleValue)),
+          physicalName("") {}
 
-    IoAliasDef(const IoAliasDef& o)
-        : aliasName(o.aliasName),
-          isInput(o.isInput),
-          isOutput(o.isOutput),
-          isSensor(o.isSensor),
-          exampleValue(o.exampleValue && *o.exampleValue ? std::optional((*o.exampleValue)->clone()) : std::nullopt) {}
-
-    IoAliasDef& operator=(const IoAliasDef& o) {
-        if (this != &o) {
-            aliasName = o.aliasName;
-            isInput = o.isInput;
-            isOutput = o.isOutput;
-            isSensor = o.isSensor;
-            exampleValue = o.exampleValue && *o.exampleValue ? std::optional((*o.exampleValue)->clone()) : std::nullopt;
-        }
-        return *this;
-    }
-
+    // Standard-Kopier- und Move-Operationen sind ausreichend
+    IoAliasDef(const IoAliasDef&) = default;
+    IoAliasDef& operator=(const IoAliasDef&) = default;
     IoAliasDef(IoAliasDef&&) = default;
     IoAliasDef& operator=(IoAliasDef&&) = default;
     IoAliasDef() = delete;
@@ -96,9 +73,9 @@ struct IoAliasDef {
 
 struct StepMetadata {
     std::uint32_t typeId{0};
-    std::string_view displayName{};
-    std::string_view description{};
-    std::string_view version{};
+    std::string displayName{};
+    std::string description{};
+    std::string version{};
     std::vector<ParamDef> params;
     std::vector<IoAliasDef> ioAliases;
 };

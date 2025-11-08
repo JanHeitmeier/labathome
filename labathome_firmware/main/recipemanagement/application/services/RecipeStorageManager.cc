@@ -1,7 +1,5 @@
 #include "RecipeStorageManager.hh"
-#include <esp_log.h>
-
-static const char* TAG = "RecipeStorageManager";
+#include <algorithm>
 
 // CRUD for JSON recipes
 

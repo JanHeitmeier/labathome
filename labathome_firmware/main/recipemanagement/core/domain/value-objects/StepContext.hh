@@ -8,6 +8,7 @@
 #include <queue>
 #include <chrono>
 #include "StepMetadata.hh"
+#include "ParameterValue.hh"
 #include "../../interfaces/engine/IInput.hh"
 #include "../../interfaces/engine/IOutput.hh"
 #include "../../../infrastructure/engine/IoResourceManager.hh"
@@ -17,7 +18,7 @@ public:
     StepContext(const StepMetadata& metadata, IoResourceManager& ioManager);
     
     // Parameter access
-    std::unique_ptr<IValue>* getParam(std::string_view key);
+    ParameterValue* getParam(std::string_view key);
     
     // IO access
     std::shared_ptr<IInput> getInput(std::string_view alias);
@@ -25,7 +26,7 @@ public:
     
     // Event logging
     void log(std::string_view message);
-    std::queue<std::string_view>& getEventQueue();
+    std::queue<std::string>& getEventQueue();
     
     // Timer management
     void startTimer(std::string_view id, std::chrono::milliseconds duration);
@@ -49,9 +50,9 @@ public:
 private:
     const StepMetadata& m_metadata;
     IoResourceManager& m_ioManager;
-    std::unordered_map<std::string_view, std::unique_ptr<IValue>> m_params;
-    std::unordered_map<std::string_view, std::pair<std::chrono::steady_clock::time_point, std::chrono::milliseconds>> m_timers;
-    std::queue<std::string_view> m_eventQueue;
+    std::unordered_map<std::string, ParameterValue> m_params;
+    std::unordered_map<std::string, std::pair<std::chrono::steady_clock::time_point, std::chrono::milliseconds>> m_timers;
+    std::queue<std::string> m_eventQueue;
     mutable std::mutex m_mutex;
     bool m_isActive;
     

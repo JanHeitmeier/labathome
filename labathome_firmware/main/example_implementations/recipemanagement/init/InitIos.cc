@@ -17,12 +17,10 @@ void IoResourceManager::init(iHAL* hal) {
     registerInput("GreenButton", std::make_shared<GreenButtonInput>(hal));
     registerInput("RedButton", std::make_shared<RedButtonInput>(hal));
     
-    // Weitere Inputs können hier hinzugefügt werden
-
-    
     // Registriere alle bekannten Outputs
     registerOutput("Fan", std::make_shared<FanOutput>(hal, 0, "Fan"));
-    
-    // Weitere Outputs können hier hinzugefügt werden
-
+    registerOutput("LED0", std::make_shared<LedOutput>(hal, 0, "LED0"));
+    registerOutput("LED1", std::make_shared<LedOutput>(hal, 1, "LED1"));
+    registerOutput("LED2", std::make_shared<LedOutput>(hal, 2, "LED2"));
+    registerOutput("LED3", std::make_shared<LedOutput>(hal, 3, "LED3"));
 }

@@ -1,10 +1,12 @@
 #pragma once
-#include "IInput.hh"
-#include "IOutput.hh"
+#include "../../core/interfaces/engine/IInput.hh"
+#include "../../core/interfaces/engine/IOutput.hh"
 #include <string>
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+
+class iHAL; // Forward declaration
 
 class IoResourceManager {
 public:

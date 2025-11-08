@@ -179,19 +179,43 @@ iHAL *DeviceManager::GetHAL()
 }
 
 void DeviceManager::EternalLoop(){   
-    ESP_LOGI(TAG, "PLC Manager started");
+    ESP_LOGE(TAG, "========== CHECKPOINT 1: PLC Manager started ==========");
     TickType_t xLastWakeTime;
     
     // Initialise the xLastWakeTime variable with the current time.
     xLastWakeTime = xTaskGetTickCount();
+    ESP_LOGE(TAG, "CHECKPOINT 2: About to parse default FBD");
     if(this->ParseNewExecutableAndEnqueue(DEFAULTFBD_FBD_FILEPATH)!=ErrorCode::OK){
         ESP_LOGW(TAG, "No defaultfbd.fbd found. Continuing with factory dummy fbd");
     }
-    hal->GreetUserOnStartup();
+    ESP_LOGE(TAG, "CHECKPOINT 3: Greeting user on startup");
+    //hal->GreetUserOnStartup();
 
+    ESP_LOGE(TAG, "CHECKPOINT 4: Setting up Modbus");
     modbus::ModbusSetup(hal);
+    
+    // TEST: Load and start test recipe via Command
+    ESP_LOGE(TAG, "========== CHECKPOINT 5: STARTING TEST RECIPE ==========");
+    const char* TEST_JSON = R"({
+      "id": "test_recipe_001",
+      "name": "LED Button Test Recipe",
+      "steps": [
+        {"stepTypeId": "0x0001", "systemId": "step_red_led", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
+        {"stepTypeId": "0x0002", "systemId": "step_yellow_green", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}},
+        {"stepTypeId": "0x0003", "systemId": "step_two_leds", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}}
+      ]
+    })";
+    
+    ESP_LOGE(TAG, "CHECKPOINT 6: Creating CommandDto");
+    CommandDto cmd;
+    cmd.command = "start_recipe";
+    cmd.payload = TEST_JSON;
+    
+    ESP_LOGE(TAG, "CHECKPOINT 7: Calling handleCommand");
+    m_recipeService->handleCommand(cmd);
+    ESP_LOGE(TAG, "========== CHECKPOINT 8: TEST RECIPE COMMAND SENT ==========");
 
-    ESP_LOGD(TAG, "devicemanager main loop starts");
+    ESP_LOGE(TAG, "CHECKPOINT 9: Entering main loop");
     while (true)
     {
         xTaskDelayUntil(&xLastWakeTime, xFrequency);

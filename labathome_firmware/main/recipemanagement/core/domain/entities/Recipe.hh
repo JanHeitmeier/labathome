@@ -1,9 +1,9 @@
-// Recipe.hpp
 #pragma once
 
 #include <string>
 #include <vector>
 #include <optional>
+#include "../value-objects/StepInstanceDescriptor.hh"
 
 class Recipe {
 public:

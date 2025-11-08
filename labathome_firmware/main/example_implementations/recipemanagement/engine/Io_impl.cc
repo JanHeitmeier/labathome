@@ -3,14 +3,12 @@
 #include "../../../recipemanagement/core/interfaces/engine/IInput.hh"
 #include "../../../recipemanagement/core/interfaces/engine/IOutput.hh"
 #include "../../../iHAL.hh"
-#include "values_impl.cc"
-
-#include <memory>
+#include <algorithm>
 
 class GreenButtonInput : public IInput {
 public:
     explicit GreenButtonInput(iHAL* hal) noexcept
-        : hal_(hal), callback_(nullptr) {}
+        : hal_(hal) {}
 
     ~GreenButtonInput() override = default;
 
@@ -18,26 +16,21 @@ public:
         return "GreenButton";
     }
 
-    ValueKind valueType() const noexcept override {
-        return ValueKind::Bool;
-    }
-
-    std::unique_ptr<IValue> read() const override {
+    ParameterValue read() const override {
         bool state = false;
         if (hal_) state = hal_->GetButtonGreenIsPressed();
-        return std::make_unique<ValueBool>(state);
+        return state;
     }
 
 private:
     iHAL* hal_;
-    Callback callback_;
 };
 
 
 class RedButtonInput : public IInput {
 public:
     explicit RedButtonInput(iHAL* hal) noexcept
-        : hal_(hal), callback_(nullptr) {}
+        : hal_(hal) {}
 
     ~RedButtonInput() override = default;
 
@@ -45,19 +38,14 @@ public:
         return "RedButton";
     }
 
-    ValueKind valueType() const noexcept override {
-        return ValueKind::Bool;
-    }
-
-    std::unique_ptr<IValue> read() const override {
+    ParameterValue read() const override {
         bool state = false;
         if (hal_) state = hal_->GetButtonRedIsPressed();
-        return std::make_unique<ValueBool>(state);
+        return state;
     }
 
 private:
     iHAL* hal_;
-    Callback callback_;
 };
 
 
@@ -72,23 +60,31 @@ public:
         return name_;
     }
 
-    ValueKind valueKind() const noexcept override {
-        return ValueKind::Float;
-    }
-
-    void write(const IValue& v) override {
+    void write(const ParameterValue& v) override {
         if (!hal_) return;
 
         float duty = 0.0f;
-        bool ok = try_extract_to_float(v, duty);
-        if (!ok) {
-            return;
-        }
+        
+        // Extract float from variant
+        std::visit([&duty](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, float>) {
+                duty = arg;
+            } else if constexpr (std::is_same_v<T, double>) {
+                duty = static_cast<float>(arg);
+            } else if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> ||
+                                 std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>) {
+                duty = static_cast<float>(arg);
+            } else if constexpr (std::is_same_v<T, bool>) {
+                duty = arg ? 100.0f : 0.0f;
+            }
+            // std::monostate and std::string are ignored (duty remains 0.0f)
+        }, v);
 
         // Clamp to [0, 100]
         duty = std::clamp(duty, 0.0f, 100.0f);
 
-        // Call HAL; ignore result or handle ErrorCode as needed
+        // Call HAL
         hal_->SetFanDuty(index_, duty);
     }
 
@@ -96,46 +92,49 @@ private:
     iHAL* hal_;
     uint8_t index_;
     const char* name_;
+};
 
-    static bool try_extract_to_float(const IValue& v, float& out) noexcept {
-        switch (v.kind()) {
-            case ValueKind::Float: {
-                float tmp = 0.0f;
-                if (v.get<float>(tmp)) { out = tmp; return true; }
-                return false;
-            }
-            case ValueKind::Double: {
-                double tmp = 0.0;
-                if (v.get<double>(tmp)) { out = static_cast<float>(tmp); return true; }
-                return false;
-            }
-            case ValueKind::Int32: {
-                std::int32_t tmp = 0;
-                if (v.get<std::int32_t>(tmp)) { out = static_cast<float>(tmp); return true; }
-                return false;
-            }
-            case ValueKind::UInt32: {
-                std::uint32_t tmp = 0;
-                if (v.get<std::uint32_t>(tmp)) { out = static_cast<float>(tmp); return true; }
-                return false;
-            }
-            case ValueKind::Int64: {
-                std::int64_t tmp = 0;
-                if (v.get<std::int64_t>(tmp)) { out = static_cast<float>(tmp); return true; }
-                return false;
-            }
-            case ValueKind::UInt64: {
-                std::uint64_t tmp = 0;
-                if (v.get<std::uint64_t>(tmp)) { out = static_cast<float>(tmp); return true; }
-                return false;
-            }
-            case ValueKind::Bool: {
-                bool tmp = false;
-                if (v.get<bool>(tmp)) { out = tmp ? 100.0f : 0.0f; return true; }
-                return false;
-            }
-            default: break;
-        }
-        return false;
+
+class LedOutput : public IOutput {
+public:
+    explicit LedOutput(iHAL* hal, uint8_t ledIndex, const char* name = "LED") noexcept
+        : hal_(hal), index_(ledIndex), name_(name) {}
+
+    ~LedOutput() override = default;
+
+    const char* name() const noexcept override {
+        return name_;
     }
+
+    void write(const ParameterValue& v) override {
+        if (!hal_) return;
+
+        // Accept either a uint32_t color value or turn off if 0/false
+        uint32_t color = 0;
+        
+        std::visit([&color](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, uint32_t>) {
+                color = arg;
+            } else if constexpr (std::is_same_v<T, int32_t>) {
+                color = static_cast<uint32_t>(arg);
+            } else if constexpr (std::is_same_v<T, uint64_t>) {
+                color = static_cast<uint32_t>(arg);
+            } else if constexpr (std::is_same_v<T, int64_t>) {
+                color = static_cast<uint32_t>(arg);
+            } else if constexpr (std::is_same_v<T, bool>) {
+                color = arg ? 0xFFFFFF : 0x000000; // White on true, off on false
+            } else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+                color = static_cast<uint32_t>(arg);
+            }
+            // std::monostate and std::string are ignored (color remains 0)
+        }, v);
+
+        hal_->ColorizeLed(index_, color);
+    }
+
+private:
+    iHAL* hal_;
+    uint8_t index_;
+    const char* name_;
 };

@@ -18,12 +18,16 @@ idf_component_register(
         # === Infrastructure - Parsers ===
         "infrastructure/parsers/RecipeParser.cc"
         
-        # === Infrastructure - Storage ===
-        "infrastructure/storage/LittleFSRecipeStorage.cc"
-        
         # === Application Layer ===
         "application/services/RecipeStorageManager.cc"
         "application/services/RecipeApplicationService.cc"
+        
+        # === Application - Use Cases (optional, momentan nicht verwendet) ===
+        # "application/usecases/CreateRecipeUseCase.cc"
+        # "application/usecases/DeleteRecipeUseCase.cc"
+        # "application/usecases/ExecuteRecipeUseCase.cc"
+        # "application/usecases/GetAvailableStepsUseCase.cc"
+        # "application/usecases/GetRecipeListUseCase.cc"
         
         # === Presentation Layer ===
         "presentation/controllers/RecipeController.cc"
@@ -40,4 +44,7 @@ idf_component_register(
 # Die folgenden Dateien müssen in der Haupt-main/CMakeLists.txt eingebunden werden:
 # - example_implementations/recipemanagement/init/InitSteps.cc
 # - example_implementations/recipemanagement/init/InitIos.cc
-# Diese implementieren die init()-Methoden von StepTypeRegistry und IoResourceManager
+# - example_implementations/recipemanagement/engine/Steps.cc (als Header-Include)
+# - example_implementations/recipemanagement/engine/Io_impl.cc (als Header-Include)
+# - example_implementations/recipemanagement/storage/RecipeStorage_impl.cc (optional)
+# Diese implementieren die init()-Methoden und konkrete Step/IO-Klassen

@@ -1,7 +1,7 @@
 // IRecipeStorage.hpp
 #pragma once
 
-#include "Recipe.hh"
+#include "../../domain/entities/Recipe.hh"
 #include <string>
 #include <vector>
 #include <optional>

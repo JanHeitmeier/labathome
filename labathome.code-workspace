@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../microsfc-master"
+		},
+		{
+			"path": "../espidf-component-webmanager"
 		}
 	],
 	"settings": {

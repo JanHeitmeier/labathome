@@ -5,14 +5,12 @@
 
 #include <vector>
 #include <string>
-#include "../storageservice/RecipeStorageManager.hh"
-#include "../../devicemanager.hh"
-#include "./RecipeController.hh"
-#include "../engine/IoResourceManager.hh"
-#include "RecipeController.hh"
-#include "../engine/IoResourceManager.hh"
-#include "../engine/RecipeEngine.hh"  
-#include <algorithm>  
+#include "../../application/services/RecipeStorageManager.hh"
+#include "../../infrastructure/engine/IoResourceManager.hh"
+#include "../../infrastructure/engine/RecipeEngine.hh"  
+#include <algorithm>
+
+class DeviceManager; // Forward declaration  
 
 class RecipeController {
 public:

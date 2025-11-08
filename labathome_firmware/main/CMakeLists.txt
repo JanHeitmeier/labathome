@@ -13,6 +13,9 @@ idf_component_register(
         "example_implementations/recipemanagement/init/InitSteps.cc"
         "example_implementations/recipemanagement/init/InitIos.cc"
         
+        # Webmanager Plugins
+        "example_implementations/webmanager_plugins/RecipeManagementPlugin.cc"
+        
     INCLUDE_DIRS 
         "." 
         "hal/${BOARD_PREFIX}" 

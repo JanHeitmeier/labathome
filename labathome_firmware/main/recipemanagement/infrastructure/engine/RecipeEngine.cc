@@ -1,5 +1,6 @@
 #include "RecipeEngine.hh"
 #include <esp_log.h>
+#include <inttypes.h>
 
 static const char* TAG = "RecipeEngine";
 
@@ -24,18 +25,39 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
     m_stepInstances.clear();
     m_stepInstances.reserve(steps.size());
     
-    for (const auto& desc : steps) {
-        IStep* step = StepTypeRegistry::instance().createInstance(desc.typeId);
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const auto& desc = steps[i];
+        std::unique_ptr<IStep> step = StepTypeRegistry::instance().createInstance(desc.typeId);
         if (!step) {
-            ESP_LOGE(TAG, "Failed to create step with typeId %u", desc.typeId);
+            ESP_LOGE(TAG, "Failed to create step with typeId");
             cleanup();
             m_state = RecipeEngineState::Error;
             m_errorMessage = "Failed to create step instance";
             return false;
         }
         
+        // Initialize the step
         step->initialize();
-        m_stepInstances.push_back(step);
+        
+        // Apply aliases from descriptor to step
+        auto aliasPointers = step->getIoAliasPointers();
+        for (IoAliasDef* aliasPtr : aliasPointers) {
+            if (!aliasPtr) continue;
+            // Find physical name for this alias in descriptor
+            auto it = desc.aliases.find(aliasPtr->aliasName);
+            if (it != desc.aliases.end()) {
+                aliasPtr->physicalName = it->second;
+                std::string msg = "Applied alias: " + aliasPtr->aliasName + " -> " + aliasPtr->physicalName;
+                ESP_LOGI(TAG, "%s", msg.c_str());
+            }
+        }
+        
+        // Apply parameters from descriptor to step
+        for (const auto& [key, value] : desc.params) {
+            step->setParamValue(key, value);
+        }
+        
+        m_stepInstances.push_back(std::move(step));
     }
     
     m_currentStepIndex = 0;
@@ -46,16 +68,19 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
 }
 
 bool RecipeEngine::start() {
+    ESP_LOGE(TAG, "CHECKPOINT E5: start called");
     if (m_state != RecipeEngineState::Loaded && m_state != RecipeEngineState::Paused) {
         ESP_LOGW(TAG, "Cannot start: engine not in Loaded/Paused state");
         return false;
     }
     
     if (m_state == RecipeEngineState::Loaded && !m_stepInstances.empty()) {
-        IStep* firstStep = m_stepInstances[m_currentStepIndex];
+        ESP_LOGE(TAG, "CHECKPOINT E6: Calling onActivating on first step");
+        IStep* firstStep = m_stepInstances[m_currentStepIndex].get();
         StepMetadata metadata = firstStep->getMetadata();
         StepContext ctx(metadata, IoResourceManager::instance());
         firstStep->onActivating(ctx);
+        ESP_LOGE(TAG, "CHECKPOINT E7: onActivating completed");
     }
     
     m_state = RecipeEngineState::Running;
@@ -91,15 +116,11 @@ bool RecipeEngine::stop() {
     }
     
     if (m_state == RecipeEngineState::Running && m_currentStepIndex < m_stepInstances.size()) {
-        IStep* currentStep = m_stepInstances[m_currentStepIndex];
+        IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
         StepMetadata metadata = currentStep->getMetadata();
         StepContext ctx(metadata, IoResourceManager::instance());
         currentStep->onDeactivating(ctx);
         currentStep->onDeactivated(ctx);
-    }
-    
-    for (auto* step : m_stepInstances) {
-        delete step;
     }
     
     m_stepInstances.clear();
@@ -120,10 +141,12 @@ void RecipeEngine::tick(uint32_t deltaMs) {
     }
     
     if (m_stepInstances.empty() || m_currentStepIndex >= m_stepInstances.size()) {
+        ESP_LOGE(TAG, "CHECKPOINT E1: Stopping - no steps or index out of bounds");
         stop();
         return;
     }
     
+    ESP_LOGE(TAG, "CHECKPOINT E2: Executing step");
     executeCurrentStep(deltaMs);
 }
 
@@ -137,12 +160,14 @@ void RecipeEngine::buildStepContext(StepContext& ctx, size_t stepIndex) {
 void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
     (void)deltaMs;
     
-    IStep* currentStep = m_stepInstances[m_currentStepIndex];
+    IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
     
+    ESP_LOGE(TAG, "CHECKPOINT E3: Getting metadata for step");
     // StepContext erstellen mit Metadata vom Step
     StepMetadata metadata = currentStep->getMetadata();
     StepContext ctx(metadata, IoResourceManager::instance());
     
+    ESP_LOGE(TAG, "CHECKPOINT E4: Calling onActive for step");
     // Wenn User quittiert hat, Context informieren damit isAcknowledged() true zurückgibt
     if (m_acknowledgedByUser) {
         ctx.setAcknowledgedState(true);
@@ -163,7 +188,9 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
         return;
     }
     
+    ESP_LOGE(TAG, "CHECKPOINT E8: Checking transition condition");
     if (currentStep->isTransitionConditionMet(ctx)) {
+        ESP_LOGE(TAG, "CHECKPOINT E9: Transition condition met, advancing to next step");
         currentStep->onDeactivating(ctx);
         currentStep->onDeactivated(ctx);
         // Acknowledged-Flag zurücksetzen für nächsten Step
@@ -173,24 +200,24 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
 }
 
 void RecipeEngine::advanceToNextStep() {
+    ESP_LOGE(TAG, "CHECKPOINT E10: advanceToNextStep called");
     m_currentStepIndex++;
     
     if (m_currentStepIndex >= m_stepInstances.size()) {
         ESP_LOGI(TAG, "Recipe completed");
         stop();
     } else {
-        IStep* nextStep = m_stepInstances[m_currentStepIndex];
+        ESP_LOGE(TAG, "CHECKPOINT E11: Activating next step");
+        IStep* nextStep = m_stepInstances[m_currentStepIndex].get();
         StepMetadata metadata = nextStep->getMetadata();
         StepContext ctx(metadata, IoResourceManager::instance());
         nextStep->onActivating(ctx);
         ESP_LOGI(TAG, "Advanced to step %u/%u", (unsigned)(m_currentStepIndex + 1), (unsigned)m_stepInstances.size());
+        ESP_LOGE(TAG, "CHECKPOINT E12: Next step activated");
     }
 }
 
 void RecipeEngine::cleanup() {
-    for (auto* step : m_stepInstances) {
-        delete step;
-    }
     m_stepInstances.clear();
     m_stepDescriptors.clear();
 }

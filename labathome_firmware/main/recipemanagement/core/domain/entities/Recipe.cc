@@ -3,9 +3,6 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
-#include <esp_log.h>
-
-static const char* TAG = "RecipeEntity";
 
 // Konstruktor mit ID und Name
 Recipe::Recipe(const std::string& id, const std::string& name)

@@ -78,6 +78,7 @@ public:
 private:
     // Befehlsverarbeitung (interne Handler)
     void handleStartRecipe(const std::string& recipeId);
+    void handleStartRecipeFromJson(const std::string& jsonRecipe);
     void handleStopRecipe();
     void handlePauseRecipe();
     void handleResumeRecipe();

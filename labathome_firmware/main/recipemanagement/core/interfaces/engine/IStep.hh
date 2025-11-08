@@ -7,9 +7,9 @@
 #include <unordered_map>
 #include <string>
 #include <string_view>
-#include "StepMetadata.hh"
-#include "StepContext.hh"
-#include "IValue.hh"
+#include "../../domain/value-objects/StepMetadata.hh"
+#include "../../domain/value-objects/StepContext.hh"
+#include "../../domain/value-objects/ParameterValue.hh"
 
 class IStep {
 public:
@@ -30,8 +30,8 @@ public:
     virtual ParamPtrList getParamDefPointers() noexcept = 0;
     virtual AliasPtrList getIoAliasPointers() noexcept = 0;
 
-    virtual std::optional<std::unique_ptr<IValue>> getParamValue(std::string_view key) const = 0;
-    virtual bool setParamValue(std::string_view key, std::unique_ptr<IValue> value) = 0;
+    virtual std::optional<ParameterValue> getParamValue(std::string_view key) const = 0;
+    virtual bool setParamValue(std::string_view key, ParameterValue value) = 0;
 
     virtual void initialize() = 0;
     virtual void onActivating(StepContext& context) = 0;
@@ -51,14 +51,12 @@ public:
     virtual State state() const noexcept = 0;
     virtual void setState(State s) noexcept = 0;
 
-    virtual std::unique_ptr<IStep> cloneEmpty() const = 0;
-    virtual std::unique_ptr<IStep> cloneWithParams() const = 0;
-
 protected:
     IStep() = default;
 };
 
-template<typename Derived>
+// Einfache Basisklasse für Step-Implementierungen
+// Externe Entwickler erben von dieser Klasse und implementieren die fehlenden virtuellen Methoden
 class StepBase : public IStep {
 public:
     StepBase() = default;
@@ -66,16 +64,22 @@ public:
     StepBase(std::uint32_t typeId, std::string_view displayName, 
              std::string_view description, std::string_view version)
         : typeId_(typeId), 
-          displayName_(displayName), 
-          description_(description), 
+          displayName_(displayName),
+          description_(description),
           version_(version) {}
     
     StepBase(const StepBase& other)
-        : typeId_(other.typeId_),
+        : state_(other.state_),
+          typeId_(other.typeId_),
           displayName_(other.displayName_),
           description_(other.description_),
-          version_(other.version_),
-          state_(other.state_) {}
+          version_(other.version_)
+    {
+        // WICHTIG: Pointer-Listen und Maps werden NICHT kopiert!
+        // Die abgeleitete Klasse muss ihre eigenen ParamDefs/IoAliasDefs
+        // neu registrieren im Copy-Konstruktor via registerParamDefs() / registerIoAliases()
+        // Dadurch zeigen die Pointer auf die eigenen Member-Variablen, nicht auf fremde Objekte
+    }
     
     StepBase(StepBase&&) = default;
     StepBase& operator=(const StepBase&) = delete;
@@ -85,16 +89,9 @@ public:
     State state() const noexcept override { return state_; }
     void setState(State s) noexcept override { state_ = s; }
 
-
-    //Check auf Nutzbarkeit, neue Obj über Konstruktor erstellen
-    std::unique_ptr<IStep> cloneEmpty() const override {
-        return std::make_unique<Derived>(static_cast<const Derived&>(*this), true);
-    }
+    // Diese müssen in der abgeleiteten Klasse implementiert werden
+    // (pure virtual bleibt aus IStep)
     
-    std::unique_ptr<IStep> cloneWithParams() const override {
-        return std::make_unique<Derived>(static_cast<const Derived&>(*this));
-    }
-
     void initialize() override {
         setState(State::Inactive);
     }
@@ -107,19 +104,19 @@ public:
         return m_aliasPtrs;
     }
 
-    std::optional<std::unique_ptr<IValue>> getParamValue(std::string_view key) const override {
+    std::optional<ParameterValue> getParamValue(std::string_view key) const override {
         ParamDef* p = findParamDefPtr(key);
-        if (!p || !p->value) return std::nullopt;
-        return std::optional<std::unique_ptr<IValue>>(p->value->clone());
+        if (!p) return std::nullopt;
+        return p->value;
     }
 
-    bool setParamValue(std::string_view key, std::unique_ptr<IValue> value) override {
-        if (!value) return false;
+    bool setParamValue(std::string_view key, ParameterValue value) override {
         ParamDef* p = findParamDefPtr(key);
         if (!p) return false;
 
         // Optional: Type check if the parameter already has a value/type defined
-        if (p->value && p->value->kind() != ValueKind::Unknown && p->value->kind() != value->kind()) {
+        if (p->value.index() != 0 && p->value.index() != value.index()) {
+            // 0 is monostate (empty), so we allow setting it
             return false;
         }
 
@@ -137,14 +134,14 @@ public:
         md.params.clear();
         for (ParamDef* p : m_paramPtrs) {
             if (p) {
-                md.params.push_back(*p); // Uses ParamDef's copy constructor
+                md.params.push_back(*p);
             }
         }
 
         md.ioAliases.clear();
         for (IoAliasDef* a : m_aliasPtrs) {
             if (a) {
-                md.ioAliases.push_back(*a); // Uses IoAliasDef's copy constructor
+                md.ioAliases.push_back(*a);
             }
         }
 
@@ -187,37 +184,22 @@ public:
     }
 
     ParamDef* findParamDefPtr(std::string_view key) const noexcept {
-        auto it = m_paramMap.find(key);
+        auto it = m_paramMap.find(std::string(key));
         return it == m_paramMap.end() ? nullptr : it->second;
     }
 
     IoAliasDef* findIoAliasPtr(std::string_view alias) const noexcept {
-        auto it = m_aliasMap.find(alias);
+        auto it = m_aliasMap.find(std::string(alias));
         return it == m_aliasMap.end() ? nullptr : it->second;
     }
 
 protected:
-    static std::optional<std::unique_ptr<IValue>> cloneOptionalValuePtr(
-        const std::optional<std::unique_ptr<IValue>>& src) 
-    {
-        if (!src) return std::nullopt;
-        if (!src->get()) return std::optional<std::unique_ptr<IValue>>(nullptr);
-        return std::optional<std::unique_ptr<IValue>>((*src)->clone());
-    }
-
     void copyParamValuesFrom(const StepBase& src) {
-        //paramdef liste muss schon gefüllt sein für diese Funktion
         for (size_t i = 0; i < m_paramPtrs.size() && i < src.m_paramPtrs.size(); ++i) {
             if (m_paramPtrs[i] && src.m_paramPtrs[i]) {
-                // Deep copy the value
-                if (src.m_paramPtrs[i]->value) {
-                    m_paramPtrs[i]->value = src.m_paramPtrs[i]->value->clone();
-                } else {
-                    m_paramPtrs[i]->value = nullptr;
-                }
-                // Deep copy min/max values
-                m_paramPtrs[i]->minValue = cloneOptionalValuePtr(src.m_paramPtrs[i]->minValue);
-                m_paramPtrs[i]->maxValue = cloneOptionalValuePtr(src.m_paramPtrs[i]->maxValue);
+                m_paramPtrs[i]->value = src.m_paramPtrs[i]->value;
+                m_paramPtrs[i]->minValue = src.m_paramPtrs[i]->minValue;
+                m_paramPtrs[i]->maxValue = src.m_paramPtrs[i]->maxValue;
             }
         }
     }
@@ -225,7 +207,7 @@ protected:
     void clearAllParamValues() {
         for (ParamDef* p : m_paramPtrs) {
             if (p) {
-                p->value = nullptr;
+                p->value = std::monostate{};
                 p->minValue = std::nullopt;
                 p->maxValue = std::nullopt;
             }
@@ -234,12 +216,8 @@ protected:
 
     template<typename T>
     static T readParamOrDefault(const ParamDef& p, T defaultValue) {
-        if (!p.value) {
-            return defaultValue;
-        }
-        T val;
-        if (p.value->get<T>(val)) {
-            return val;
+        if (const T* val = std::get_if<T>(&p.value)) {
+            return *val;
         }
         return defaultValue;
     }
@@ -249,15 +227,15 @@ protected:
     }
 
     std::uint32_t getTypeIdForMetadata() const noexcept { return typeId_; }
-    std::string_view getDisplayNameForMetadata() const noexcept { return displayName_; }
-    std::string_view getDescriptionForMetadata() const noexcept { return description_; }
-    std::string_view getVersionForMetadata() const noexcept { return version_; }
+    const std::string& getDisplayNameForMetadata() const noexcept { return displayName_; }
+    const std::string& getDescriptionForMetadata() const noexcept { return description_; }
+    const std::string& getVersionForMetadata() const noexcept { return version_; }
 
+    // Diese sind protected, damit abgeleitete Klassen darauf zugreifen können
     ParamPtrList m_paramPtrs;
     AliasPtrList m_aliasPtrs;
 
 private:
-//überschreibt die Refeerenzen in der Param list mit den aktuellen , Hilffunktion die eventuell überflüssig ist. 
     void rebuildParamMap() {
         m_paramMap.clear();
         for (ParamDef* p : m_paramPtrs) {
@@ -273,8 +251,8 @@ private:
     }
 
     State state_{State::Inactive};
-    std::unordered_map<std::string_view, ParamDef*> m_paramMap;
-    std::unordered_map<std::string_view, IoAliasDef*> m_aliasMap;
+    std::unordered_map<std::string, ParamDef*> m_paramMap;
+    std::unordered_map<std::string, IoAliasDef*> m_aliasMap;
 
     std::uint32_t typeId_{0};
     std::string displayName_{};

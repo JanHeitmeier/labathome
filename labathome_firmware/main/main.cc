@@ -119,19 +119,23 @@ extern "C" void app_main()
     //Generating deviceManager
     devicemanager = new DeviceManager(hal);
     
+    // Create Recipe Management Plugin first to cast it properly
+    auto* recipePlugin = new RecipeManagementPlugin(devicemanager);
+    
     std::vector<webmanager::iWebmanagerPlugin*> plugins;
     plugins.push_back(new HeaterExperimentPlugin(devicemanager));
     plugins.push_back(new FunctionblockPlugin(devicemanager));
     plugins.push_back(new SystemInfoPlugin(tempHandle));
     plugins.push_back(new UsersettingsPlugin("nvs"));
-    plugins.push_back(new RecipeManagementPlugin(devicemanager));
+    plugins.push_back(recipePlugin);
     
     
     //Configure Network
     webmanager::M* wm = webmanager::M::GetSingleton();
     ESP_ERROR_CHECK(wm->Begin(cfg::HOSTNAME, "labathome", cfg::HOSTNAME, false, &plugins, true));
     
-    devicemanager->SetMessageGateway(static_cast<IMessageGateway*>(plugins[4]));
+    // Set RecipeManagementPlugin as message gateway (it implements both interfaces)
+    devicemanager->SetMessageGateway(recipePlugin);
 
     const char *hostname = wm->GetHostname();
 #ifdef HTTPS

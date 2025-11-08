@@ -1,9 +1,10 @@
 
 #include "RecipeController.hh"
-
+#include "../../infrastructure/parsers/RecipeParser.hh"
+#include "../../core/domain/entities/Recipe.hh"
 
 RecipeController::RecipeController(DeviceManager& deviceManager, RecipeStorageManager& storageManager)
-    : m_deviceManager(deviceManager), m_storageManager(storageManager), m_engineRunning(false) {
+    : m_storageManager(storageManager), m_deviceManager(deviceManager), m_engineRunning(false) {
     // WICHTIG: IoResourceManager und StepTypeRegistry werden NICHT hier initialisiert!
     // Diese Initialisierungen müssen im DeviceManager::init() oder main.cc erfolgen,
     // BEVOR dieser Controller erstellt wird:
@@ -20,8 +21,19 @@ RecipeController::~RecipeController() {
 }
 
 std::vector<std::string> RecipeController::getRecipeList() {
-    // Hole Liste der verfügbaren Rezepte aus StorageManager
-    return m_storageManager.getRecipeList();  // Angenommen, Methode existiert – passe an
+    // Get all JSON recipes and extract their names
+    std::vector<std::string> recipeNames;
+    auto jsonRecipes = m_storageManager.getAllJsonRecipes();
+    RecipeParser parser;
+    
+    for (const auto& jsonRecipe : jsonRecipes) {
+        Recipe recipe;
+        if (parser.parseJsonToRecipe(jsonRecipe, recipe)) {
+            recipeNames.push_back(recipe.name());
+        }
+    }
+    
+    return recipeNames;
 }
 
 void RecipeController::stopEngine() {
@@ -47,12 +59,20 @@ bool RecipeController::startRecipe(const std::string& recipeName) {
 }
 
 bool RecipeController::loadRecipe(const std::string& recipeName) {
-    // Lade Rezept aus StorageManager
-    auto recipe = m_storageManager.loadRecipe(recipeName);  // Angenommen, Methode existiert – passe an
-    if (recipe) {
-        m_currentRecipe = recipeName;
-        // Beispiel: m_engine->load(recipe);
-        return true;
+    // Find recipe by name in JSON recipes
+    auto jsonRecipes = m_storageManager.getAllJsonRecipes();
+    RecipeParser parser;
+    
+    for (const auto& jsonRecipe : jsonRecipes) {
+        Recipe recipe;
+        if (parser.parseJsonToRecipe(jsonRecipe, recipe)) {
+            if (recipe.name() == recipeName) {
+                m_currentRecipe = recipeName;
+                // TODO: Load recipe into engine when engine is implemented
+                return true;
+            }
+        }
     }
+    
     return false;
 }

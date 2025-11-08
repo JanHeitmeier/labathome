@@ -5,24 +5,14 @@ StepTypeRegistry& StepTypeRegistry::instance() {
     return registry;
 }
 
-void StepTypeRegistry::registerStepType(std::unique_ptr<IStep> prototype) {
-    if (!prototype) return;
-    
-    std::lock_guard<std::mutex> lock(m_mutex);
-    uint32_t typeId = prototype->getMetadata().typeId;
-    m_prototypes[typeId] = std::move(prototype);
-}
-
 std::vector<StepMetadata> StepTypeRegistry::availableTypes() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     
     std::vector<StepMetadata> result;
-    result.reserve(m_prototypes.size());
+    result.reserve(m_types.size());
     
-    for (const auto& [id, prototype] : m_prototypes) {
-        if (prototype) {
-            result.push_back(prototype->getMetadata());
-        }
+    for (const auto& [id, info] : m_types) {
+        result.push_back(info.metadata);
     }
     
     return result;
@@ -32,77 +22,60 @@ AvailableStepsDto StepTypeRegistry::availableTypesAsDto() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     
     AvailableStepsDto dto;
-    dto.steps.reserve(m_prototypes.size());
+    dto.steps.reserve(m_types.size());
     
-    for (const auto& [id, prototype] : m_prototypes) {
-        if (!prototype) continue;
-        
-        StepMetadata metadata = prototype->getMetadata();
+    for (const auto& [id, info] : m_types) {
+        const StepMetadata& metadata = info.metadata;
         StepMetadataDto stepDto;
         
         // Basis-Informationen
         stepDto.typeId = std::to_string(metadata.typeId);
         stepDto.displayName = std::string(metadata.displayName);
         stepDto.description = std::string(metadata.description);
-        stepDto.category = "general"; // TODO: Aus Metadata oder Config
+        stepDto.category = "general";
         
         // Parameter konvertieren
         for (const auto& param : metadata.params) {
             ParameterMetadataDto paramDto;
             paramDto.name = std::string(param.key);
             
-            // Typ aus IValue extrahieren
-            if (param.value) {
-                switch (param.value->kind()) {
-                    case ValueKind::Int:   paramDto.type = "int"; break;
-                    case ValueKind::Float: paramDto.type = "float"; break;
-                    case ValueKind::Bool:  paramDto.type = "bool"; break;
-                    case ValueKind::String: paramDto.type = "string"; break;
-                    default: paramDto.type = "unknown"; break;
+            // Typ aus ParameterValue bestimmen
+            std::visit([&paramDto](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, bool>) {
+                    paramDto.type = "bool";
+                } else if constexpr (std::is_same_v<T, int32_t>) {
+                    paramDto.type = "int32";
+                } else if constexpr (std::is_same_v<T, uint32_t>) {
+                    paramDto.type = "uint32";
+                } else if constexpr (std::is_same_v<T, int64_t>) {
+                    paramDto.type = "int64";
+                } else if constexpr (std::is_same_v<T, uint64_t>) {
+                    paramDto.type = "uint64";
+                } else if constexpr (std::is_same_v<T, float>) {
+                    paramDto.type = "float";
+                } else if constexpr (std::is_same_v<T, double>) {
+                    paramDto.type = "double";
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    paramDto.type = "string";
+                } else {
+                    paramDto.type = "unknown";
                 }
-                
-                // Default-Wert als String
-                int intVal;
-                float floatVal;
-                bool boolVal;
-                const char* strVal;
-                
-                if (param.value->get(intVal)) {
-                    paramDto.defaultValue = std::to_string(intVal);
-                } else if (param.value->get(floatVal)) {
-                    paramDto.defaultValue = std::to_string(floatVal);
-                } else if (param.value->get(boolVal)) {
-                    paramDto.defaultValue = boolVal ? "true" : "false";
-                } else if (param.value->get(strVal)) {
-                    paramDto.defaultValue = strVal;
-                }
+            }, param.value);
+            
+            paramDto.defaultValue = to_string(param.value);
+            
+            if (param.minValue.has_value()) {
+                paramDto.minValue = to_string(*param.minValue);
             }
             
-            // Min-Wert
-            if (param.minValue && *param.minValue) {
-                int intVal;
-                float floatVal;
-                if ((*param.minValue)->get(intVal)) {
-                    paramDto.minValue = std::to_string(intVal);
-                } else if ((*param.minValue)->get(floatVal)) {
-                    paramDto.minValue = std::to_string(floatVal);
-                }
-            }
-            
-            // Max-Wert
-            if (param.maxValue && *param.maxValue) {
-                int intVal;
-                float floatVal;
-                if ((*param.maxValue)->get(intVal)) {
-                    paramDto.maxValue = std::to_string(intVal);
-                } else if ((*param.maxValue)->get(floatVal)) {
-                    paramDto.maxValue = std::to_string(floatVal);
-                }
+            if (param.maxValue.has_value()) {
+                paramDto.maxValue = to_string(*param.maxValue);
             }
             
             paramDto.description = std::string(param.description);
-            paramDto.required = !param.minValue.has_value(); // Heuristik: Wenn kein Min → required
-            paramDto.unit = std::string(param.label); // Label oft als Unit genutzt
+            paramDto.required = true;
+            paramDto.unit = param.unit;
             
             stepDto.parameters.push_back(std::move(paramDto));
         }
@@ -112,11 +85,10 @@ AvailableStepsDto StepTypeRegistry::availableTypesAsDto() const {
             IoAliasMetadataDto ioDto;
             ioDto.aliasName = std::string(alias.aliasName);
             
-            // ioType bestimmen
             if (alias.isSensor) {
                 ioDto.ioType = "sensor";
             } else if (alias.isInput && alias.isOutput) {
-                ioDto.ioType = "input-output"; // Bidirektional
+                ioDto.ioType = "input-output";
             } else if (alias.isInput) {
                 ioDto.ioType = "input";
             } else if (alias.isOutput) {
@@ -125,20 +97,8 @@ AvailableStepsDto StepTypeRegistry::availableTypesAsDto() const {
                 ioDto.ioType = "unknown";
             }
             
-            // valueType aus exampleValue
-            if (alias.exampleValue && *alias.exampleValue) {
-                switch ((*alias.exampleValue)->kind()) {
-                    case ValueKind::Bool:  ioDto.valueType = "bool"; break;
-                    case ValueKind::Int:   ioDto.valueType = "int"; break;
-                    case ValueKind::Float: ioDto.valueType = "float"; break;
-                    case ValueKind::String: ioDto.valueType = "string"; break;
-                    default: ioDto.valueType = "unknown"; break;
-                }
-            } else {
-                ioDto.valueType = "unknown";
-            }
-            
-            ioDto.description = ""; // TODO: Falls in IoAliasDef vorhanden
+            ioDto.valueType = alias.valueType;
+            ioDto.description = "";
             
             stepDto.ioAliases.push_back(std::move(ioDto));
         }
@@ -152,12 +112,13 @@ AvailableStepsDto StepTypeRegistry::availableTypesAsDto() const {
 std::unique_ptr<IStep> StepTypeRegistry::createInstance(uint32_t typeId) const {
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    auto it = m_prototypes.find(typeId);
-    if (it == m_prototypes.end() || !it->second) {
+    auto it = m_types.find(typeId);
+    if (it == m_types.end()) {
         return nullptr;
     }
     
-    return it->second->cloneEmpty();
+    // Factory-Funktion aufrufen um neue Instanz zu erzeugen
+    return it->second.factory();
 }
 
 // HINWEIS: init() wird ABSICHTLICH NICHT hier implementiert!
