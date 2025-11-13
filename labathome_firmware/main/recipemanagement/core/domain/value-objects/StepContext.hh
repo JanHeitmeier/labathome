@@ -15,7 +15,7 @@
 
 class StepContext {
 public:
-    StepContext(const StepMetadata& metadata, IoResourceManager& ioManager);
+    StepContext(StepMetadata metadata, IoResourceManager& ioManager);
     
     // Parameter access
     ParameterValue* getParam(std::string_view key);
@@ -48,7 +48,7 @@ public:
     std::mutex& getMutex();
 
 private:
-    const StepMetadata& m_metadata;
+    StepMetadata m_metadata; // Copy instead of reference - persists with context
     IoResourceManager& m_ioManager;
     std::unordered_map<std::string, ParameterValue> m_params;
     std::unordered_map<std::string, std::pair<std::chrono::steady_clock::time_point, std::chrono::milliseconds>> m_timers;

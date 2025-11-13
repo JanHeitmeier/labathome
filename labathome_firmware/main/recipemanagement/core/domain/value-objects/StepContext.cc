@@ -1,8 +1,8 @@
 #include "StepContext.hh"
 
-StepContext::StepContext(const StepMetadata& metadata, IoResourceManager& ioManager)
-    : m_metadata(metadata), m_ioManager(ioManager), m_isActive(false) {
-    for (const auto& param : metadata.params) {
+StepContext::StepContext(StepMetadata metadata, IoResourceManager& ioManager)
+    : m_metadata(std::move(metadata)), m_ioManager(ioManager), m_isActive(false) {
+    for (const auto& param : m_metadata.params) {
         if (!param.key.empty()) {
             m_params[param.key] = param.value;
         }

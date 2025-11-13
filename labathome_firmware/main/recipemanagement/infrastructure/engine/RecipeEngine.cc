@@ -24,6 +24,8 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
     m_stepDescriptors = steps;
     m_stepInstances.clear();
     m_stepInstances.reserve(steps.size());
+    m_stepContexts.clear();
+    m_stepContexts.reserve(steps.size());
     
     for (size_t i = 0; i < steps.size(); ++i) {
         const auto& desc = steps[i];
@@ -58,29 +60,31 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
         }
         
         m_stepInstances.push_back(std::move(step));
+        
+        // Create persistent context for this step
+        StepMetadata metadata = m_stepInstances.back()->getMetadata();
+        m_stepContexts.push_back(std::make_unique<StepContext>(metadata, IoResourceManager::instance()));
     }
     
     m_currentStepIndex = 0;
     m_elapsedMs = 0;
     m_state = RecipeEngineState::Loaded;
-    ESP_LOGI(TAG, "Recipe loaded: id=%s, steps=%u", recipeId.c_str(), (unsigned)steps.size());
+    ESP_LOGI(TAG, "Recipe loaded: id=%s, steps=%zu", recipeId.c_str(), steps.size());
     return true;
 }
 
 bool RecipeEngine::start() {
-    ESP_LOGE(TAG, "CHECKPOINT E5: start called");
     if (m_state != RecipeEngineState::Loaded && m_state != RecipeEngineState::Paused) {
         ESP_LOGW(TAG, "Cannot start: engine not in Loaded/Paused state");
         return false;
     }
     
     if (m_state == RecipeEngineState::Loaded && !m_stepInstances.empty()) {
-        ESP_LOGE(TAG, "CHECKPOINT E6: Calling onActivating on first step");
         IStep* firstStep = m_stepInstances[m_currentStepIndex].get();
+        StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
         StepMetadata metadata = firstStep->getMetadata();
-        StepContext ctx(metadata, IoResourceManager::instance());
-        firstStep->onActivating(ctx);
-        ESP_LOGE(TAG, "CHECKPOINT E7: onActivating completed");
+        ESP_LOGI(TAG, ">> Starting Step 1/%zu: typeId=%lu name=%s", m_stepInstances.size(), (unsigned long)metadata.typeId, metadata.displayName.c_str());
+        firstStep->onActivating(*ctx);
     }
     
     m_state = RecipeEngineState::Running;
@@ -141,12 +145,10 @@ void RecipeEngine::tick(uint32_t deltaMs) {
     }
     
     if (m_stepInstances.empty() || m_currentStepIndex >= m_stepInstances.size()) {
-        ESP_LOGE(TAG, "CHECKPOINT E1: Stopping - no steps or index out of bounds");
         stop();
         return;
     }
     
-    ESP_LOGE(TAG, "CHECKPOINT E2: Executing step");
     executeCurrentStep(deltaMs);
 }
 
@@ -161,24 +163,20 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
     (void)deltaMs;
     
     IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
-    
-    ESP_LOGE(TAG, "CHECKPOINT E3: Getting metadata for step");
-    // StepContext erstellen mit Metadata vom Step
+    StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
     StepMetadata metadata = currentStep->getMetadata();
-    StepContext ctx(metadata, IoResourceManager::instance());
     
-    ESP_LOGE(TAG, "CHECKPOINT E4: Calling onActive for step");
     // Wenn User quittiert hat, Context informieren damit isAcknowledged() true zurückgibt
     if (m_acknowledgedByUser) {
-        ctx.setAcknowledgedState(true);
+        ctx->setAcknowledgedState(true);
     }
     
-    currentStep->onActive(ctx);
+    currentStep->onActive(*ctx);
     
     // Prüfen ob Step Quittierung angefordert hat
-    if (ctx.isAwaitingAcknowledgment() && !m_waitingForAcknowledgment) {
+    if (ctx->isAwaitingAcknowledgment() && !m_waitingForAcknowledgment) {
         m_waitingForAcknowledgment = true;
-        m_currentUserInstruction = ctx.getUserInstruction();
+        m_currentUserInstruction = ctx->getUserInstruction();
         ESP_LOGI(TAG, "Step requests acknowledgment: %s", m_currentUserInstruction.c_str());
         return; // Engine pausiert automatisch
     }
@@ -188,11 +186,10 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
         return;
     }
     
-    ESP_LOGE(TAG, "CHECKPOINT E8: Checking transition condition");
-    if (currentStep->isTransitionConditionMet(ctx)) {
-        ESP_LOGE(TAG, "CHECKPOINT E9: Transition condition met, advancing to next step");
-        currentStep->onDeactivating(ctx);
-        currentStep->onDeactivated(ctx);
+    if (currentStep->isTransitionConditionMet(*ctx)) {
+        ESP_LOGI(TAG, "<< Step %zu/%zu completed: typeId=%lu", m_currentStepIndex + 1, m_stepInstances.size(), (unsigned long)metadata.typeId);
+        currentStep->onDeactivating(*ctx);
+        currentStep->onDeactivated(*ctx);
         // Acknowledged-Flag zurücksetzen für nächsten Step
         m_acknowledgedByUser = false;
         advanceToNextStep();
@@ -200,25 +197,23 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
 }
 
 void RecipeEngine::advanceToNextStep() {
-    ESP_LOGE(TAG, "CHECKPOINT E10: advanceToNextStep called");
     m_currentStepIndex++;
     
     if (m_currentStepIndex >= m_stepInstances.size()) {
-        ESP_LOGI(TAG, "Recipe completed");
+        ESP_LOGI(TAG, "Recipe completed - all steps finished");
         stop();
     } else {
-        ESP_LOGE(TAG, "CHECKPOINT E11: Activating next step");
         IStep* nextStep = m_stepInstances[m_currentStepIndex].get();
+        StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
         StepMetadata metadata = nextStep->getMetadata();
-        StepContext ctx(metadata, IoResourceManager::instance());
-        nextStep->onActivating(ctx);
-        ESP_LOGI(TAG, "Advanced to step %u/%u", (unsigned)(m_currentStepIndex + 1), (unsigned)m_stepInstances.size());
-        ESP_LOGE(TAG, "CHECKPOINT E12: Next step activated");
+        ESP_LOGI(TAG, ">> Starting Step %zu/%zu: typeId=%lu name=%s", m_currentStepIndex + 1, m_stepInstances.size(), (unsigned long)metadata.typeId, metadata.displayName.c_str());
+        nextStep->onActivating(*ctx);
     }
 }
 
 void RecipeEngine::cleanup() {
     m_stepInstances.clear();
+    m_stepContexts.clear();
     m_stepDescriptors.clear();
 }
 

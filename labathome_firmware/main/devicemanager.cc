@@ -189,7 +189,7 @@ void DeviceManager::EternalLoop(){
         ESP_LOGW(TAG, "No defaultfbd.fbd found. Continuing with factory dummy fbd");
     }
     ESP_LOGE(TAG, "CHECKPOINT 3: Greeting user on startup");
-    //hal->GreetUserOnStartup();
+    hal->GreetUserOnStartup();
 
     ESP_LOGE(TAG, "CHECKPOINT 4: Setting up Modbus");
     modbus::ModbusSetup(hal);

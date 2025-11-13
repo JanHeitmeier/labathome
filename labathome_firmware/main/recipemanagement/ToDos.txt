@@ -339,4 +339,55 @@ das Programm muss auf ihn warten, aber dem Benutzter muss auch zum richtigen Zei
                                                     ┌──────────────────┐
                                                     │ WebSocket        │
                                                     │ → Frontend       │
-                                                    └──────────────────┘                  
+                                                    └──────────────────┘        
+
+
+Ausgabe von Serial Monitor mit funktionierenden Test json. 
+I (10274) Step_0x0001: Button pressed - LED off, waiting 1000ms
+I (11084) HAL: Heap 2134060  RED 0 YEL 0 GRN 0 MOV 1 ENC 0 SOUND 0 SUPPLY  0.0 BRGHT  3.0 HEAT  0.0 AIRT 26.9 AIRPRS   nan AIRHUM 100 CO2   nan, ANALOGIN  0.0
+I (11324) Step_0x0001: Timer expired - ready for transition
+I (11324) Step_0x0001: ==> Transition condition MET - cleaning up timer
+I (11324) RecipeEngine: << Step 1/3 completed: typeId=1
+I (11324) RecipeEngine: >> Starting Step 2/3: typeId=2 name=YellowGreenLedButton
+I (11324) Step_0x0002: LED set to YELLOW for 2s
+I (13374) Step_0x0002: 2s elapsed - waiting for button press
+I (16084) HAL: Heap 2134060  RED 0 YEL 0 GRN 0 MOV 1 ENC 0 SOUND 0 SUPPLY  0.0 BRGHT  2.0 HEAT  0.0 AIRT 27.0 AIRPRS   nan AIRHUM 100 CO2   nan, ANALOGIN  0.0
+I (17674) Step_0x0002: First press - LED now GREEN
+I (20624) Step_0x0002: Second press - LED off, step complete
+I (20624) Step_0x0002: Transition condition met - both presses detected
+I (20624) RecipeEngine: << Step 2/3 completed: typeId=2
+I (20624) RecipeEngine: >> Starting Step 3/3: typeId=3 name=TwoLedTwoButton
+I (20624) Step_0x0003: Both LEDs on - waiting for both buttons
+I (21084) HAL: Heap 2134060  RED 0 YEL 0 GRN 0 MOV 1 ENC 0 SOUND 0 SUPPLY  0.0 BRGHT  2.0 HEAT  0.0 AIRT 27.2 AIRPRS   nan AIRHUM 100 CO2   nan, ANALOGIN  0.0
+I (26084) HAL: Heap 2134060  RED 0 YEL 0 GRN 0 MOV 0 ENC 0 SOUND 0 SUPPLY  0.0 BRGHT  3.0 HEAT  0.0 AIRT 27.4 AIRPRS   nan AIRHUM 100 CO2   nan, ANALOGIN  0.0
+I (27824) Step_0x0003: Both buttons pressed - LEDs off
+I (27824) Step_0x0003: Transition condition met - step complete
+I (27824) RecipeEngine: << Step 3/3 completed: typeId=3
+I (27824) RecipeEngine: Recipe completed - all steps finished
+I (27824) RecipeEngine: Recipe stopped
+I (31084) HAL: Heap 2137740  RED 0 YEL 0 GRN 0 MOV 1 ENC 0 SOUND 0 SUPPLY  0.0 BRGHT  2.0 HEAT  0.0 AIRT 27.2 AIRPRS   nan AIRHUM  87 CO2   nan, ANALOGIN  0.0                                                   
+
+(
+// TEST: Load and start test recipe via Command
+    ESP_LOGE(TAG, "========== CHECKPOINT 5: STARTING TEST RECIPE ==========");
+    const char* TEST_JSON = R"({
+      "id": "test_recipe_001",
+      "name": "LED Button Test Recipe",
+      "steps": [
+        {"stepTypeId": "0x0001", "systemId": "step_red_led", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
+        {"stepTypeId": "0x0002", "systemId": "step_yellow_green", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}},
+        {"stepTypeId": "0x0003", "systemId": "step_two_leds", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}}
+      ]
+    })";
+    
+    ESP_LOGE(TAG, "CHECKPOINT 6: Creating CommandDto");
+    CommandDto cmd;
+    cmd.command = "start_recipe";
+    cmd.payload = TEST_JSON;
+    
+    ESP_LOGE(TAG, "CHECKPOINT 7: Calling handleCommand");
+    m_recipeService->handleCommand(cmd);
+    ESP_LOGE(TAG, "========== CHECKPOINT 8: TEST RECIPE COMMAND SENT ==========");
+)
+
+

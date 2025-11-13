@@ -54,41 +54,22 @@ public:
 
     void onActivating(StepContext &ctx) override
     {
-        ESP_LOGE("RedLedButtonStep", "CHECKPOINT S1: onActivating called");
         // LED rot leuchten lassen (0xFF0000FF = red in RGBA format)
         auto led = ctx.getOutput(ledRed.aliasName);
-        ESP_LOGE("RedLedButtonStep", "CHECKPOINT S2: Got LED output");
         if (led) {
-            ESP_LOGE("RedLedButtonStep", "CHECKPOINT S3: Writing red color to LED");
             led->write(uint32_t(0xFF0000FF)); // RGBA: Red
-            ESP_LOGE("RedLedButtonStep", "CHECKPOINT S4: Write completed");
+            ESP_LOGI("Step_0x0001", "LED set to RED, waiting for button press");
         } else {
-            ESP_LOGE("RedLedButtonStep", "ERROR S5: LED output is null!");
+            ESP_LOGE("Step_0x0001", "ERROR: LED output not found!");
         }
         setState(State::Activating);
         buttonWasPressed = false;
-        ctx.log("RedLedButton: LED is red, waiting for button press");
-        ESP_LOGE("RedLedButtonStep", "CHECKPOINT S6: onActivating completed");
     }
 
     void onActive(StepContext &ctx) override
     {
-        ESP_LOGE("RedLedButtonStep", "CHECKPOINT S10: onActive called");
         if (state() == State::Activating)
         {
-            ESP_LOGE("RedLedButtonStep", "CHECKPOINT S11: State is Activating");
-            
-            // Test: LED einschalten
-            ESP_LOGE("RedLedButtonStep", "CHECKPOINT S11a: Getting LED output");
-            auto led = ctx.getOutput(ledRed.aliasName);
-            if (led) {
-                ESP_LOGE("RedLedButtonStep", "CHECKPOINT S11b: LED output found, writing red");
-                led->write(uint32_t(0xFF0000FF)); // RGBA: Red
-                ESP_LOGE("RedLedButtonStep", "CHECKPOINT S11c: LED write completed");
-            } else {
-                ESP_LOGE("RedLedButtonStep", "ERROR S11d: LED output is null");
-            }
-            
             // Prüfe ob RedButton gedrückt wurde
             auto btn = ctx.getInput(btnRed.aliasName);
             if (btn)
@@ -103,31 +84,25 @@ public:
                         // LED ausschalten
                         auto led2 = ctx.getOutput(ledRed.aliasName);
                         if (led2) {
-                            led2->write(uint32_t(0x000000));
+                            led2->write(uint32_t(0x00000000));
                         }
                         
                         // Konfigurierbare Wartezeit aus Parameter lesen
                         uint32_t waitMs = readParamOrDefault(waitTimeParam, uint32_t(1000));
                         ctx.startTimer("wait", std::chrono::milliseconds(waitMs));
                         setState(State::Active);
-                        ctx.log("RedLedButton: Button pressed, LED off, waiting");
+                        ESP_LOGI("Step_0x0001", "Button pressed - LED off, waiting 1000ms");
                     }
                 }
             }
         }
         else if (state() == State::Active)
         {
-            ESP_LOGE("RedLedButtonStep", "CHECKPOINT S12: State is Active");
-            // Warte auf Timer
+            // Warte auf Timer - DON'T stop it here, let transition condition check it
             if (ctx.isTimerExpired("wait"))
             {
-                ctx.stopTimer("wait");
-                ctx.log("RedLedButton: Step complete");
+                ESP_LOGI("Step_0x0001", "Timer expired - ready for transition");
             }
-        }
-        else
-        {
-            ESP_LOGE("RedLedButtonStep", "ERROR S13: State is neither Activating nor Active");
         }
     }
 
@@ -145,24 +120,15 @@ public:
 
     bool isTransitionConditionMet(StepContext &ctx) override
     {
-        if (state() == State::Activating)
-        {
-            // Warte auf Button-Druck
-            auto btn = ctx.getInput(btnRed.aliasName);
-            if (btn)
-            {
-                auto val = btn->read();
-                if (auto *pBool = std::get_if<bool>(&val))
-                {
-                    return *pBool;
-                }
-            }
-            return false;
-        }
+        // Transition nur wenn State::Active und Timer abgelaufen
         if (state() == State::Active)
         {
-            // Warte auf Timer
-            return ctx.isTimerExpired("wait");
+            bool timerDone = ctx.isTimerExpired("wait");
+            if (timerDone) {
+                ESP_LOGI("Step_0x0001", "==> Transition condition MET - cleaning up timer");
+                ctx.stopTimer("wait");
+            }
+            return timerDone;
         }
         return false;
     }
@@ -237,7 +203,7 @@ public:
         firstPressDetected = false;
         secondPressDetected = false;
         wasPressed = false;
-        ctx.log("YellowGreenLedButton: LED yellow, waiting");
+        ESP_LOGI("Step_0x0002", "LED set to YELLOW for 2s");
     }
 
     void onActive(StepContext &ctx) override
@@ -261,7 +227,7 @@ public:
             {
                 ctx.stopTimer("yellow");
                 setState(State::Active);
-                ctx.log("YellowGreenLedButton: 2s elapsed, waiting for first button press");
+                ESP_LOGI("Step_0x0002", "2s elapsed - waiting for button press");
             }
         }
         else if (state() == State::Active)
@@ -278,7 +244,7 @@ public:
                     if (led) {
                         led->write(uint32_t(0x00FF00FF)); // RGBA: Green
                     }
-                    ctx.log("YellowGreenLedButton: First press - LED green, waiting for second press");
+                    ESP_LOGI("Step_0x0002", "First press - LED now GREEN");
                 }
             }
             else if (!secondPressDetected)
@@ -293,7 +259,7 @@ public:
                     if (led) {
                         led->write(uint32_t(0x00000000));
                     }
-                    ctx.log("YellowGreenLedButton: Second press - Step complete");
+                    ESP_LOGI("Step_0x0002", "Second press - LED off, step complete");
                 }
             }
         }
@@ -315,15 +281,14 @@ public:
 
     bool isTransitionConditionMet(StepContext &ctx) override
     {
-        if (state() == State::Activating)
-        {
-            // Warte auf 2s Timer
-            return ctx.isTimerExpired("yellow");
-        }
         if (state() == State::Active)
         {
             // Fertig wenn beide Buttons gedrückt wurden
-            return firstPressDetected && secondPressDetected;
+            bool done = firstPressDetected && secondPressDetected;
+            if (done) {
+                ESP_LOGI("Step_0x0002", "Transition condition met - both presses detected");
+            }
+            return done;
         }
         return false;
     }
@@ -373,14 +338,14 @@ public:
         auto ledG = ctx.getOutput(ledGreen.aliasName);
         
         if (ledR) {
-            ledR->write(uint32_t(0x0000FF)); // GRB: Red
+            ledR->write(uint32_t(0xFF0000FF)); // RGBA: Red
         }
         if (ledG) {
-            ledG->write(uint32_t(0xFF0000)); // GRB: Green
+            ledG->write(uint32_t(0x00FF00FF)); // RGBA: Green
         }
         
         setState(State::Activating);
-        ctx.log("TwoLedTwoButton: Red+Green LEDs on, waiting for both buttons");
+        ESP_LOGI("Step_0x0003", "Both LEDs on - waiting for both buttons");
     }
 
     void onActive(StepContext &ctx) override
@@ -418,14 +383,14 @@ public:
                 auto ledG = ctx.getOutput(ledGreen.aliasName);
                 
                 if (ledR) {
-                    ledR->write(uint32_t(0x000000));
+                    ledR->write(uint32_t(0x00000000));
                 }
                 if (ledG) {
-                    ledG->write(uint32_t(0x000000));
+                    ledG->write(uint32_t(0x00000000));
                 }
                 
                 setState(State::Active);
-                ctx.log("TwoLedTwoButton: Both buttons pressed - Step complete");
+                ESP_LOGI("Step_0x0003", "Both buttons pressed - LEDs off");
             }
         }
     }
@@ -437,10 +402,10 @@ public:
         auto ledG = ctx.getOutput(ledGreen.aliasName);
         
         if (ledR) {
-            ledR->write(uint32_t(0x000000));
+            ledR->write(uint32_t(0x00000000));
         }
         if (ledG) {
-            ledG->write(uint32_t(0x000000));
+            ledG->write(uint32_t(0x00000000));
         }
         
         setState(State::Deactivated);
@@ -450,37 +415,10 @@ public:
 
     bool isTransitionConditionMet(StepContext &ctx) override
     {
-        if (state() == State::Activating)
-        {
-            // Prüfe ob beide Buttons gleichzeitig gedrückt sind
-            auto btnR = ctx.getInput(btnRed.aliasName);
-            auto btnG = ctx.getInput(btnGreen.aliasName);
-            
-            bool redPressed = false, greenPressed = false;
-            
-            if (btnR)
-            {
-                auto val = btnR->read();
-                if (auto *pBool = std::get_if<bool>(&val))
-                {
-                    redPressed = *pBool;
-                }
-            }
-            
-            if (btnG)
-            {
-                auto val = btnG->read();
-                if (auto *pBool = std::get_if<bool>(&val))
-                {
-                    greenPressed = *pBool;
-                }
-            }
-            
-            return redPressed && greenPressed;
-        }
         if (state() == State::Active)
         {
             // Sofort fertig nach dem beide Buttons gedrückt wurden
+            ESP_LOGI("Step_0x0003", "Transition condition met - step complete");
             return true;
         }
         return false;

@@ -51,6 +51,7 @@ private:
     std::string m_recipeName;
     std::vector<StepInstanceDescriptor> m_stepDescriptors;
     std::vector<std::unique_ptr<IStep>> m_stepInstances;
+    std::vector<std::unique_ptr<StepContext>> m_stepContexts; // Persistent contexts for each step
     size_t m_currentStepIndex{0};
     uint32_t m_elapsedMs{0};
     std::string m_errorMessage;
