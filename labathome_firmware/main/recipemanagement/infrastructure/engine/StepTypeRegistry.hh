@@ -28,9 +28,10 @@ private:
         StepFactory factory;
         StepMetadata metadata;
     };
-    
+    //Hier werden die impl. Steps ihrer TypeId gemappt
     std::unordered_map<uint32_t, StepTypeInfo> m_types;
     mutable std::mutex m_mutex;
+    uint32_t m_nextTypeId = 0x0001;  // Auto-incrementing TypeId
     
     StepTypeRegistry() = default;
     
@@ -56,24 +57,34 @@ public:
      * @brief Registriert einen Step-Typ mit Template (bevorzugte Methode)
      * @tparam StepType Der Step-Typ (muss von IStep erben)
      * 
-     * Erzeugt temporär eine Instanz um Metadaten zu extrahieren,
-     * dann wird sie sofort zerstört. Die Factory speichert nur
-     * eine Funktion zum späteren Erzeugen.
+     * Die Registry vergibt automatisch eine aufsteigende TypeId.
+     * Die Reihenfolge der Registrierung in init() bestimmt die IDs.
+     * Die TypeId wird via setTypeId() in die Step-Instanz injiziert.
      */
     template<typename StepType>
     void registerStepType() {
-        // Temporär erzeugen nur für Metadaten-Extraktion
+        std::lock_guard<std::mutex> lock(m_mutex);
+        
+        // Aktuelle TypeId
+        uint32_t assignedTypeId = m_nextTypeId++;
+        
+        // Temporär erzeugen OHNE TypeId im Konstruktor
         auto temp = std::make_unique<StepType>();
-        uint32_t typeId = temp->getMetadata().typeId;
+        
+        // TypeId nachträglich setzen
+        temp->setTypeId(assignedTypeId);
+        
+        // Metadaten auslesen (enthalten jetzt die korrekte TypeId) dieser schritt zum vereinfachten auslesen der Metadataen nach Start Ohne obj. zur laufzeit bei abfrage generieren zu müssen.
         StepMetadata metadata = temp->getMetadata();
         
-        // Factory-Funktion speichern (kein Objekt!)
-        StepFactory factory = []() -> std::unique_ptr<IStep> {
-            return std::make_unique<StepType>();
+        // Factory-Funktion speichern (mit Capture der assignedTypeId)
+        StepFactory factory = [assignedTypeId]() -> std::unique_ptr<IStep> {
+            auto instance = std::make_unique<StepType>();
+            instance->setTypeId(assignedTypeId);
+            return instance;
         };
         
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_types[typeId] = StepTypeInfo{std::move(factory), std::move(metadata)};
+        m_types[assignedTypeId] = StepTypeInfo{std::move(factory), std::move(metadata)};
         
         // temp wird hier automatisch zerstört
     }

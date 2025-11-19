@@ -13,7 +13,8 @@
  * - Gespeichert wird nur eine Factory-Funktion zum späteren Erzeugen
  */
 void StepTypeRegistry::init() {
-    // Registriere alle verfügbaren Steps (Template-Syntax)
+    // Registriere alle verfügbaren Steps (Template-Syntax
+     
     registerStepType<RedLedButtonStep>();
     registerStepType<YellowGreenLedButtonStep>();
     registerStepType<TwoLedTwoButtonStep>();

@@ -7,7 +7,6 @@
 // Konstruktor mit ID und Name
 Recipe::Recipe(const std::string& id, const std::string& name)
 	: id_(id), name_(name) {
-	// TODO: implement - ggf. Validierungen oder Default-Werte setzen
 }
 
 // basic accessors

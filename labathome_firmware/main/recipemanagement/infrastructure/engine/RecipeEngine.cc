@@ -27,9 +27,11 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
     m_stepContexts.clear();
     m_stepContexts.reserve(steps.size());
     
+    auto& registry = StepTypeRegistry::instance();
+    
     for (size_t i = 0; i < steps.size(); ++i) {
         const auto& desc = steps[i];
-        std::unique_ptr<IStep> step = StepTypeRegistry::instance().createInstance(desc.typeId);
+        std::unique_ptr<IStep> step = registry.createInstance(desc.typeId);
         if (!step) {
             ESP_LOGE(TAG, "Failed to create step with typeId");
             cleanup();
@@ -38,7 +40,7 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
             return false;
         }
         
-        // Initialize the step
+        // Initialize the step, das wird benötgit damit alle Steps in passender ausgangslage kommen
         step->initialize();
         
         // Apply aliases from descriptor to step

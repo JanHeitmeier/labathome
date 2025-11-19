@@ -61,9 +61,10 @@ class StepBase : public IStep {
 public:
     StepBase() = default;
     
-    StepBase(std::uint32_t typeId, std::string_view displayName, 
+    // Konstruktor OHNE typeId - wird später von Registry via setTypeId() gesetzt
+    StepBase(std::string_view displayName, 
              std::string_view description, std::string_view version)
-        : typeId_(typeId), 
+        : typeId_(0),  // Wird später von Registry gesetzt
           displayName_(displayName),
           description_(description),
           version_(version) {}
@@ -88,6 +89,16 @@ public:
 
     State state() const noexcept override { return state_; }
     void setState(State s) noexcept override { state_ = s; }
+
+    /**
+     * @brief Setzt die TypeId - INTERNAL USE ONLY
+     * 
+     * Diese Methode wird ausschließlich von StepTypeRegistry aufgerufen.
+     * Steps sollten sie niemals selbst aufrufen!
+     */
+    void setTypeId(uint32_t typeId) {
+        typeId_ = typeId;
+    }
 
     // Diese müssen in der abgeleiteten Klasse implementiert werden
     // (pure virtual bleibt aus IStep)

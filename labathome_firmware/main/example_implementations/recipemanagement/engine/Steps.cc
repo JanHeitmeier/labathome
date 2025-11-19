@@ -19,7 +19,7 @@ private:
 
 public:
     RedLedButtonStep()
-        : StepBase(0x0001, "RedLedButton", "Turn LED red, wait for red button press, then wait configured time", "1.0"),
+        : StepBase("RedLedButton", "Turn LED red, wait for red button press, then wait configured time", "1.0"),
           ledRed("LED", false, true, false, "uint32_t"),
           btnRed("RedButton", true, false, true, "bool"),
           waitTimeParam("waitTime", 
@@ -149,7 +149,7 @@ private:
 
 public:
     YellowGreenLedButtonStep()
-        : StepBase(0x0002, "YellowGreenLedButton", "LED yellow for configured time, green on button, off on second button", "1.0"),
+        : StepBase("YellowGreenLedButton", "LED yellow for configured time, green on button, off on second button", "1.0"),
           ledYellow("LED", false, true, false, "uint32_t"),
           btnGreen("GreenButton", true, false, true, "bool"),
           yellowTimeParam("yellowTime",
@@ -307,7 +307,7 @@ private:
 
 public:
     TwoLedTwoButtonStep()
-        : StepBase(0x0003, "TwoLedTwoButton", "Red+Green LEDs on, both buttons pressed to finish", "1.0"),
+        : StepBase("TwoLedTwoButton", "Red+Green LEDs on, both buttons pressed to finish", "1.0"),
           ledRed("LEDRed", false, true, false, "uint32_t"),
           ledGreen("LEDGreen", false, true, false, "uint32_t"),
           btnRed("RedButton", true, false, true, "bool"),

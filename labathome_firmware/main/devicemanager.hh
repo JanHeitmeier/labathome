@@ -150,7 +150,7 @@ class DeviceManager:public FBContext
         float setpointServo1=0;
         float setpointHeater=0;
         float setpointVoltageOut=0;
-
+        //Rezeptmanagement Sektion
         IRecipeStorage* m_recipeStorage;
         RecipeEngine* m_recipeEngine;
         RecipeApplicationService* m_recipeService;

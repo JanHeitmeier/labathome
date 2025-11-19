@@ -184,19 +184,16 @@ void DeviceManager::EternalLoop(){
     
     // Initialise the xLastWakeTime variable with the current time.
     xLastWakeTime = xTaskGetTickCount();
-    ESP_LOGE(TAG, "CHECKPOINT 2: About to parse default FBD");
     if(this->ParseNewExecutableAndEnqueue(DEFAULTFBD_FBD_FILEPATH)!=ErrorCode::OK){
         ESP_LOGW(TAG, "No defaultfbd.fbd found. Continuing with factory dummy fbd");
     }
-    ESP_LOGE(TAG, "CHECKPOINT 3: Greeting user on startup");
     hal->GreetUserOnStartup();
-
-    ESP_LOGE(TAG, "CHECKPOINT 4: Setting up Modbus");
     modbus::ModbusSetup(hal);
     
     // TEST: Load and start test recipe via Command
     ESP_LOGE(TAG, "========== CHECKPOINT 5: STARTING TEST RECIPE ==========");
-    const char* TEST_JSON = R"({
+    
+    const char* TEST_JSON_ONE = R"({
       "id": "test_recipe_001",
       "name": "LED Button Test Recipe",
       "steps": [
@@ -206,10 +203,31 @@ void DeviceManager::EternalLoop(){
       ]
     })";
     
+    const char* TEST_JSON_TWO = R"({
+      "id": "test_recipe_002",
+      "name": "Red-Yellow Alternating Test",
+      "steps": [
+        {"stepTypeId": "0x0001", "systemId": "step_red_led_1", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
+        {"stepTypeId": "0x0002", "systemId": "step_yellow_green_1", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}},
+        {"stepTypeId": "0x0001", "systemId": "step_red_led_2", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
+        {"stepTypeId": "0x0002", "systemId": "step_yellow_green_2", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}}
+      ]
+    })";
+    
+    const char* TEST_JSON_THREE = R"({
+      "id": "test_recipe_003",
+      "name": "Two-LEDs with Red in Between",
+      "steps": [
+        {"stepTypeId": "0x0003", "systemId": "step_two_leds_1", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}},
+        {"stepTypeId": "0x0001", "systemId": "step_red_led", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
+        {"stepTypeId": "0x0003", "systemId": "step_two_leds_2", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}}
+      ]
+    })";
+    
     ESP_LOGE(TAG, "CHECKPOINT 6: Creating CommandDto");
     CommandDto cmd;
     cmd.command = "start_recipe";
-    cmd.payload = TEST_JSON;
+    cmd.payload = TEST_JSON_ONE;
     
     ESP_LOGE(TAG, "CHECKPOINT 7: Calling handleCommand");
     m_recipeService->handleCommand(cmd);

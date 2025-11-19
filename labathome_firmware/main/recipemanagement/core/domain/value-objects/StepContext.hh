@@ -26,6 +26,7 @@ public:
     
     // Event logging
     void log(std::string_view message);
+    //Die Eventqueue ermöglicht das asncrone ausgeben von nachrichten und bestätigungen
     std::queue<std::string>& getEventQueue();
     
     // Timer management
