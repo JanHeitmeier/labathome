@@ -11,7 +11,7 @@
 #include "ParameterValue.hh"
 #include "../../interfaces/engine/IInput.hh"
 #include "../../interfaces/engine/IOutput.hh"
-#include "../../../infrastructure/engine/IoResourceManager.hh"
+#include "../../services/IoResourceManager.hh"
 
 class StepContext {
 public:

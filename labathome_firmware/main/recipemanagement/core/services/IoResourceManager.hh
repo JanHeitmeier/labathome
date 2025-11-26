@@ -1,6 +1,6 @@
 #pragma once
-#include "../../core/interfaces/engine/IInput.hh"
-#include "../../core/interfaces/engine/IOutput.hh"
+#include "../interfaces/engine/IInput.hh"
+#include "../interfaces/engine/IOutput.hh"
 #include <string>
 #include <memory>
 #include <unordered_map>

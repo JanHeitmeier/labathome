@@ -3,7 +3,7 @@
 #include "StepTypeRegistry.hh"
 #include "../../core/domain/value-objects/StepContext.hh"
 #include "../../core/domain/value-objects/StepInstanceDescriptor.hh"
-#include "IoResourceManager.hh"
+#include "../../core/services/IoResourceManager.hh"
 #include "../../core/interfaces/engine/IStep.hh"
 #include <string>
 #include <vector>

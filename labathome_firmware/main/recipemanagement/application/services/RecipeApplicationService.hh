@@ -7,7 +7,7 @@
 #include "../dtos/RecipeDto.hh"
 #include "../dtos/MetricsDto.hh"
 #include "../../core/interfaces/storage/IRecipeStorage.hh"
-#include "../../core/interfaces/messaging/IMessageGateway.hh"
+#include "../interfaces/IMessageGateway.hh"
 #include "../../infrastructure/engine/RecipeEngine.hh"
 #include "RecipeStorageManager.hh"
 #include <memory>

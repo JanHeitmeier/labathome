@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../../application/dtos/LiveViewDto.hh"
-#include "../../../application/dtos/AvailableStepsDto.hh"
-#include "../../../application/dtos/AvailableRecipesDto.hh"
-#include "../../../application/dtos/RecipeDto.hh"
-#include "../../../application/dtos/MetricsDto.hh"
+#include "../dtos/LiveViewDto.hh"
+#include "../dtos/AvailableStepsDto.hh"
+#include "../dtos/AvailableRecipesDto.hh"
+#include "../dtos/RecipeDto.hh"
+#include "../dtos/MetricsDto.hh"
 
 /**
  * @brief Interface für ausgehende Nachrichten vom Backend zum Frontend

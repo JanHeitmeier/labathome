@@ -1,7 +1,7 @@
 #pragma once
 
 #include "webmanager_interfaces.hh"
-#include "core/interfaces/messaging/IMessageGateway.hh"
+#include "recipemanagement/application/interfaces/IMessageGateway.hh"
 #include <string>
 #include <flatbuffers/flatbuffers.h>
 

@@ -29,16 +29,11 @@ void RecipeApplicationService::setMessageGateway(IMessageGateway* gateway) {
 void RecipeApplicationService::handleCommand(const CommandDto& dto) {
     const std::string& cmd = dto.command;
     
-    ESP_LOGE("RecipeAppService", "========== CHECKPOINT 10: handleCommand called ==========");
-    
     if (cmd == "start_recipe") {
-        ESP_LOGE("RecipeAppService", "CHECKPOINT 11: Command is start_recipe");
         // Wenn payload vorhanden, ist es ein komplettes JSON-Rezept zum Speichern und Starten
         if (!dto.payload.empty()) {
-            ESP_LOGE("RecipeAppService", "CHECKPOINT 12: Payload available, calling handleStartRecipeFromJson");
             handleStartRecipeFromJson(dto.payload);
         } else {
-            ESP_LOGE("RecipeAppService", "CHECKPOINT 13: No payload, using recipeId");
             // Ansonsten: recipeId aus Storage laden
             handleStartRecipe(dto.recipeId);
         }
@@ -81,65 +76,47 @@ void RecipeApplicationService::handleCommand(const CommandDto& dto) {
 // Command-Handlers
 
 void RecipeApplicationService::handleStartRecipeFromJson(const std::string& jsonRecipe) {
-    ESP_LOGE("RecipeAppService", "========== CHECKPOINT 14: handleStartRecipeFromJson START ==========");
-    
     if (!m_engine || !m_storageManager) {
-        ESP_LOGE("RecipeAppService", "ERROR CHECKPOINT 15: Engine or StorageManager is null");
+        ESP_LOGE("RecipeAppService", "Engine or StorageManager is null");
         return;
     }
-    
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 16: Engine and StorageManager OK");
-    
     // 1. Parse JSON to extract recipe ID
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 17: Creating RecipeParser");
     RecipeParser parser;
     Recipe recipe;
     
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 18: Calling parseJsonToRecipe");
     if (!parser.parseJsonToRecipe(jsonRecipe, recipe)) {
-        ESP_LOGE("RecipeAppService", "ERROR CHECKPOINT 19: Failed to parse recipe JSON");
+        ESP_LOGE("RecipeAppService", "Failed to parse recipe JSON");
         return;
     }
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 20: Successfully parsed recipe");
     
     // 2. Save recipe JSON using storage manager
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 21: Saving recipe via storage");
     // Convert recipe string ID to uint32_t hash for storage
     uint32_t recipeIdHash = 0;
     for (char c : recipe.id()) {
         recipeIdHash = recipeIdHash * 31 + static_cast<uint32_t>(c);
     }
     if (!m_storageManager->updateJsonRecipe(recipeIdHash, jsonRecipe)) {
-        ESP_LOGE("RecipeAppService", "ERROR CHECKPOINT 23: Failed to save recipe");
-    } else {
-        ESP_LOGE("RecipeAppService", "CHECKPOINT 22: Recipe saved successfully");
+        ESP_LOGE("RecipeAppService", "Failed to save recipe");
     }
     
     // 3. Parse to StepInstanceDescriptors
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 24: Parsing JSON to StepInstanceDescriptors");
     std::vector<StepInstanceDescriptor> steps;
     if (!parser.parseJsonToStepDescriptors(jsonRecipe, steps)) {
-        ESP_LOGE("RecipeAppService", "ERROR CHECKPOINT 25: Failed to parse steps from JSON");
+        ESP_LOGE("RecipeAppService", "Failed to parse steps from JSON");
         return;
     }
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 26: Successfully parsed steps");
     
     // 4. Load into engine and start
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 27: Loading recipe into engine");
     if (!m_engine->loadRecipe(steps, recipe.id())) {
-        ESP_LOGE("RecipeAppService", "ERROR CHECKPOINT 28: Failed to load recipe into engine");
+        ESP_LOGE("RecipeAppService", "Failed to load recipe into engine");
         return;
     }
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 29: Recipe loaded successfully");
     
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 30: Starting recipe execution");
     if (!m_engine->start()) {
-        ESP_LOGE("RecipeAppService", "ERROR CHECKPOINT 31: Failed to start recipe execution");
+        ESP_LOGE("RecipeAppService", "Failed to start recipe execution");
         return;
     }
     
-    ESP_LOGE("RecipeAppService", "CHECKPOINT 32: Recipe started successfully");
-    ESP_LOGE("RecipeAppService", "========== CHECKPOINT 33: handleStartRecipeFromJson END ==========");
     sendLiveViewUpdate();
 }
 
@@ -185,14 +162,14 @@ void RecipeApplicationService::handleResumeRecipe() {
     // TODO: Engine fortsetzen
     // m_engine->resume();
     
-    sendLiveViewUpdate();
+    //sendLiveViewUpdate();
 }
 
 void RecipeApplicationService::handleAcknowledgeStep() {
     if (!m_engine) return;
     
     m_engine->acknowledgeStep();
-    sendLiveViewUpdate();
+    //sendLiveViewUpdate();
 }
 
 void RecipeApplicationService::handleGetRecipeList() {
@@ -206,8 +183,8 @@ void RecipeApplicationService::handleGetAvailableSteps() {
     if (!m_gateway) return;
     
     // StepTypeRegistry nach DTOs fragen
-    AvailableStepsDto dto = StepTypeRegistry::instance().availableTypesAsDto();
-    m_gateway->send(dto);
+   // AvailableStepsDto dto = nullptr //StepTypeRegistry::instance().availableTypesAsDto(); Wegen Core Abhängigkeiten Funktion entfernt.
+    //m_gateway->send(dto);
 }
 
 void RecipeApplicationService::handleSaveRecipe(const std::string& payloadJson) {

@@ -1,4 +1,4 @@
-# Recipe Management Framework - ESP-IDF Komponente
+# Recipe Management Framework als - ESP-IDF Komponente
 # Wird als eigenständige Komponente in EXTRA_COMPONENT_DIRS registriert
 
 idf_component_register(
@@ -7,8 +7,10 @@ idf_component_register(
         "core/domain/entities/Recipe.cc"
         "core/domain/value-objects/StepContext.cc"
         
+        # === Core Services ===
+        "core/services/IoResourceManager.cc"
+        
         # === Infrastructure - Engine ===
-        "infrastructure/engine/IoResourceManager.cc"
         "infrastructure/engine/RecipeEngine.cc"
         "infrastructure/engine/StepTypeRegistry.cc"
         
@@ -29,9 +31,6 @@ idf_component_register(
         # "application/usecases/GetAvailableStepsUseCase.cc"
         # "application/usecases/GetRecipeListUseCase.cc"
         
-        # === Presentation Layer ===
-        "presentation/controllers/RecipeController.cc"
-        
     INCLUDE_DIRS 
         "."
         
@@ -46,5 +45,5 @@ idf_component_register(
 # - example_implementations/recipemanagement/init/InitIos.cc
 # - example_implementations/recipemanagement/engine/Steps.cc (als Header-Include)
 # - example_implementations/recipemanagement/engine/Io_impl.cc (als Header-Include)
-# - example_implementations/recipemanagement/storage/RecipeStorage_impl.cc (optional)
+# - example_implementations/recipemanagement/storage/RecipeStorage_impl.cc (optional im Protopyen zumindest) 
 # Diese implementieren die init()-Methoden und konkrete Step/IO-Klassen

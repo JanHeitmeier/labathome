@@ -11,7 +11,7 @@
 #include "esp_vfs.h"
 #include "modbus.hh"
 
-#include "recipemanagement/infrastructure/engine/IoResourceManager.hh"
+#include "recipemanagement/core/services/IoResourceManager.hh"
 #include "recipemanagement/infrastructure/engine/StepTypeRegistry.hh"
 #include "recipemanagement/infrastructure/engine/RecipeEngine.hh"
 #include "recipemanagement/application/services/RecipeApplicationService.hh"
@@ -191,8 +191,6 @@ void DeviceManager::EternalLoop(){
     modbus::ModbusSetup(hal);
     
     // TEST: Load and start test recipe via Command
-    ESP_LOGE(TAG, "========== CHECKPOINT 5: STARTING TEST RECIPE ==========");
-    
     const char* TEST_JSON_ONE = R"({
       "id": "test_recipe_001",
       "name": "LED Button Test Recipe",
@@ -224,16 +222,12 @@ void DeviceManager::EternalLoop(){
       ]
     })";
     
-    ESP_LOGE(TAG, "CHECKPOINT 6: Creating CommandDto");
     CommandDto cmd;
     cmd.command = "start_recipe";
-    cmd.payload = TEST_JSON_ONE;
+    cmd.payload = TEST_JSON_TWO;
     
-    ESP_LOGE(TAG, "CHECKPOINT 7: Calling handleCommand");
     m_recipeService->handleCommand(cmd);
-    ESP_LOGE(TAG, "========== CHECKPOINT 8: TEST RECIPE COMMAND SENT ==========");
 
-    ESP_LOGE(TAG, "CHECKPOINT 9: Entering main loop");
     while (true)
     {
         xTaskDelayUntil(&xLastWakeTime, xFrequency);

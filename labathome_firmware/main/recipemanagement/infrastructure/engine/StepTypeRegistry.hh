@@ -7,7 +7,6 @@
 #include <functional>
 #include "../../core/domain/value-objects/StepMetadata.hh"
 #include "../../core/interfaces/engine/IStep.hh"
-#include "../../application/dtos/AvailableStepsDto.hh"
 
 /**
  * @brief Factory-Funktion die einen neuen Step erzeugt
@@ -94,13 +93,6 @@ public:
      * @return Vector mit StepMetadata für alle verfügbaren Steps
      */
     std::vector<StepMetadata> availableTypes() const;
-    
-    /**
-     * @brief Gibt alle verfügbaren Step-Typen als DTO für die Web-UI zurück
-     * @return AvailableStepsDto bereit für JSON-Serialisierung
-     */
-    AvailableStepsDto availableTypesAsDto() const;
-    
     /**
      * @brief Erstellt eine neue Instanz eines Steps anhand seiner TypeId
      * @param typeId Die eindeutige TypeId des gewünschten Steps

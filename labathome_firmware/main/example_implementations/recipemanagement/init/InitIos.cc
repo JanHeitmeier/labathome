@@ -1,4 +1,4 @@
-#include "../../../recipemanagement/infrastructure/engine/IoResourceManager.hh"
+#include "../../../recipemanagement/core/services/IoResourceManager.hh"
 #include "../engine/Io_impl.cc"
 
 /**
