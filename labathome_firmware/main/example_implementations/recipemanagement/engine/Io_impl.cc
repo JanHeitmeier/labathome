@@ -64,7 +64,8 @@ public:
         if (!hal_) return;
 
         float duty = 0.0f;
-        
+        //To-Do: Diese viele flexibilität ist explizit nicht gefordert !!!!!!!!
+        // hal->set(uint16 index, uint16 wert)
         // Extract float from variant
         std::visit([&duty](auto&& arg) {
             using T = std::decay_t<decltype(arg)>;

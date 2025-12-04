@@ -5,7 +5,13 @@
 #include <cstdint>
 #include <type_traits>
 
-//Noch Analyse ob es sinnvol ist die Visit Funktion witer zu überladen. 
+//uint16 ist für die meisten sensoren an range ausreichend. 
+//druck auch bei 0 ansetzten, druck in Kilopascal, da 65000 schnell überschritten wird sonst. 
+
+//Für physikalische Größen SI-Einheiten, immer uint16 werte temp in zentel schritten (faktor) grad kelvin. Prozent von 0 bis u16int max. 
+//TEmparatur sensor misst temp, datenkapsel enthält zahlen wert und einheit. 
+//TEmperatur immer intern in demselnen typen gespeichert, temp immer float, umdrehung immer int S
+
 
 // Definiert alle möglichen Typen, die ein Parameter annehmen kann.
 using ParameterValue = std::variant<
