@@ -23,12 +23,12 @@ public:
           ledRed("LED", false, true, false, "uint32_t"),
           btnRed("RedButton", true, false, true, "bool"),
           waitTimeParam("waitTime", 
-                        ParameterValue(uint32_t(1000)),
+                        ParameterValue::fromTimeMilliseconds(1000),
                         "Wait Time",
                         "Time to wait after button press",
                         "ms",
-                        ParameterValue(uint32_t(100)),
-                        ParameterValue(uint32_t(10000))),
+                        ParameterValue::fromTimeMilliseconds(100),
+                        ParameterValue::fromTimeMilliseconds(10000)),
           buttonWasPressed(false)
     {
         registerIoAliases({&ledRed, &btnRed});
@@ -57,7 +57,7 @@ public:
         // LED rot leuchten lassen (0xFF0000FF = red in RGBA format)
         auto led = ctx.getOutput(ledRed.aliasName);
         if (led) {
-            led->write(uint32_t(0xFF0000FF)); // RGBA: Red
+            led->write(ParameterValue::fromGenericInt(0xFF0000FF)); // RGBA: Red
             ESP_LOGI("Step_0x0001", "LED set to RED, waiting for button press");
         } else {
             ESP_LOGE("Step_0x0001", "ERROR: LED output not found!");
@@ -75,16 +75,16 @@ public:
             if (btn)
             {
                 auto val = btn->read();
-                if (auto *pBool = std::get_if<bool>(&val))
+                if (val.isType(ParameterType::BOOLEAN))
                 {
-                    if (*pBool && !buttonWasPressed)
+                    if (val.getBoolean() && !buttonWasPressed)
                     {
                         buttonWasPressed = true;
                         
                         // LED ausschalten
                         auto led2 = ctx.getOutput(ledRed.aliasName);
                         if (led2) {
-                            led2->write(uint32_t(0x00000000));
+                            led2->write(ParameterValue::fromGenericInt(0x00000000));
                         }
                         
                         // Konfigurierbare Wartezeit aus Parameter lesen
@@ -111,7 +111,7 @@ public:
         // LED sicherheitshalber ausschalten
         auto led = ctx.getOutput(ledRed.aliasName);
         if (led) {
-            led->write(uint32_t(0x00000000));
+            led->write(ParameterValue::fromGenericInt(0x00000000));
         }
         setState(State::Deactivated);
     }
@@ -153,12 +153,12 @@ public:
           ledYellow("LED", false, true, false, "uint32_t"),
           btnGreen("GreenButton", true, false, true, "bool"),
           yellowTimeParam("yellowTime",
-                          ParameterValue(uint32_t(2000)),
+                          ParameterValue::fromTimeMilliseconds(2000),
                           "Yellow Duration",
                           "Time LED stays yellow",
                           "ms",
-                          ParameterValue(uint32_t(500)),
-                          ParameterValue(uint32_t(10000))),
+                          ParameterValue::fromTimeMilliseconds(500),
+                          ParameterValue::fromTimeMilliseconds(10000)),
           firstPressDetected(false),
           secondPressDetected(false),
           wasPressed(false)
@@ -193,7 +193,7 @@ public:
         // LED gelb leuchten lassen (0xFFFF00FF = yellow in RGBA format)
         auto led = ctx.getOutput(ledYellow.aliasName);
         if (led) {
-            led->write(uint32_t(0xFFFF00FF)); // RGBA: Yellow
+            led->write(ParameterValue::fromGenericInt(0xFFFF00FF)); // RGBA: Yellow
         }
         
         // Konfigurierbare Timer-Dauer aus Parameter lesen
@@ -214,9 +214,9 @@ public:
         if (btn)
         {
             auto val = btn->read();
-            if (auto *pBool = std::get_if<bool>(&val))
+            if (val.isType(ParameterType::BOOLEAN))
             {
-                currentlyPressed = *pBool;
+                currentlyPressed = val.getBoolean();
             }
         }
 
@@ -242,7 +242,7 @@ public:
                     // LED auf grün schalten (0x00FF00FF = green in RGBA format)
                     auto led = ctx.getOutput(ledYellow.aliasName);
                     if (led) {
-                        led->write(uint32_t(0x00FF00FF)); // RGBA: Green
+                        led->write(ParameterValue::fromGenericInt(0x00FF00FF)); // RGBA: Green
                     }
                     ESP_LOGI("Step_0x0002", "First press - LED now GREEN");
                 }
@@ -257,7 +257,7 @@ public:
                     // LED ausschalten
                     auto led = ctx.getOutput(ledYellow.aliasName);
                     if (led) {
-                        led->write(uint32_t(0x00000000));
+                        led->write(ParameterValue::fromGenericInt(0x00000000));
                     }
                     ESP_LOGI("Step_0x0002", "Second press - LED off, step complete");
                 }
@@ -272,7 +272,7 @@ public:
         // LED sicherheitshalber ausschalten
         auto led = ctx.getOutput(ledYellow.aliasName);
         if (led) {
-            led->write(uint32_t(0x00000000));
+            led->write(ParameterValue::fromGenericInt(0x00000000));
         }
         setState(State::Deactivated);
     }
@@ -338,10 +338,10 @@ public:
         auto ledG = ctx.getOutput(ledGreen.aliasName);
         
         if (ledR) {
-            ledR->write(uint32_t(0xFF0000FF)); // RGBA: Red
+            ledR->write(ParameterValue::fromGenericInt(0xFF0000FF)); // RGBA: Red
         }
         if (ledG) {
-            ledG->write(uint32_t(0x00FF00FF)); // RGBA: Green
+            ledG->write(ParameterValue::fromGenericInt(0x00FF00FF)); // RGBA: Green
         }
         
         setState(State::Activating);
@@ -361,18 +361,18 @@ public:
             if (btnR)
             {
                 auto val = btnR->read();
-                if (auto *pBool = std::get_if<bool>(&val))
+                if (val.isType(ParameterType::BOOLEAN))
                 {
-                    redPressed = *pBool;
+                    redPressed = val.getBoolean();
                 }
             }
             
             if (btnG)
             {
                 auto val = btnG->read();
-                if (auto *pBool = std::get_if<bool>(&val))
+                if (val.isType(ParameterType::BOOLEAN))
                 {
-                    greenPressed = *pBool;
+                    greenPressed = val.getBoolean();
                 }
             }
             
@@ -383,10 +383,10 @@ public:
                 auto ledG = ctx.getOutput(ledGreen.aliasName);
                 
                 if (ledR) {
-                    ledR->write(uint32_t(0x00000000));
+                    ledR->write(ParameterValue::fromGenericInt(0x00000000));
                 }
                 if (ledG) {
-                    ledG->write(uint32_t(0x00000000));
+                    ledG->write(ParameterValue::fromGenericInt(0x00000000));
                 }
                 
                 setState(State::Active);
@@ -402,10 +402,10 @@ public:
         auto ledG = ctx.getOutput(ledGreen.aliasName);
         
         if (ledR) {
-            ledR->write(uint32_t(0x00000000));
+            ledR->write(ParameterValue::fromGenericInt(0x00000000));
         }
         if (ledG) {
-            ledG->write(uint32_t(0x00000000));
+            ledG->write(ParameterValue::fromGenericInt(0x00000000));
         }
         
         setState(State::Deactivated);

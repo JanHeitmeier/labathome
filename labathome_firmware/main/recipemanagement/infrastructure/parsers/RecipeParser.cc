@@ -198,14 +198,6 @@ bool RecipeParser::parseJsonToStepDescriptors(const std::string& jsonText, std::
             }
         }
         
-        ESP_LOGE(TAG, "CHECKPOINT P20: Parsing repeatCount");
-        // Parse repeat count (optional, default = 1)
-        if (stepObj.HasMember("repeatCount") && stepObj["repeatCount"].IsInt()) {
-            desc.repeatCount = stepObj["repeatCount"].GetInt();
-        } else {
-            desc.repeatCount = 1;
-        }
-        
         ESP_LOGE(TAG, "CHECKPOINT P21: Adding step to vector");
         outSteps.push_back(std::move(desc));
         

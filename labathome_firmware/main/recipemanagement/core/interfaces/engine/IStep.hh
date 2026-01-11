@@ -32,6 +32,7 @@ public:
 
     virtual std::optional<ParameterValue> getParamValue(std::string_view key) const = 0;
     virtual bool setParamValue(std::string_view key, ParameterValue value) = 0;
+    virtual ParamDef* findParamDefPtr(std::string_view key) const noexcept = 0;
 
     virtual void initialize() = 0;
     virtual void onActivating(StepContext& context) = 0;
@@ -115,6 +116,11 @@ public:
         return m_aliasPtrs;
     }
 
+    ParamDef* findParamDefPtr(std::string_view key) const noexcept override {
+        auto it = m_paramMap.find(std::string(key));
+        return it == m_paramMap.end() ? nullptr : it->second;
+    }
+
     std::optional<ParameterValue> getParamValue(std::string_view key) const override {
         ParamDef* p = findParamDefPtr(key);
         if (!p) return std::nullopt;
@@ -126,8 +132,8 @@ public:
         if (!p) return false;
 
         // Optional: Type check if the parameter already has a value/type defined
-        if (p->value.index() != 0 && p->value.index() != value.index()) {
-            // 0 is monostate (empty), so we allow setting it
+        if (p->value.isValid() && value.isValid() && p->value.getType() != value.getType()) {
+            // Type mismatch - don't allow changing parameter type
             return false;
         }
 
@@ -194,11 +200,6 @@ public:
         for (IoAliasDef* a : list) registerIoAlias(a);
     }
 
-    ParamDef* findParamDefPtr(std::string_view key) const noexcept {
-        auto it = m_paramMap.find(std::string(key));
-        return it == m_paramMap.end() ? nullptr : it->second;
-    }
-
     IoAliasDef* findIoAliasPtr(std::string_view alias) const noexcept {
         auto it = m_aliasMap.find(std::string(alias));
         return it == m_aliasMap.end() ? nullptr : it->second;
@@ -215,21 +216,55 @@ protected:
         }
     }
 
-    void clearAllParamValues() {
-        for (ParamDef* p : m_paramPtrs) {
-            if (p) {
-                p->value = std::monostate{};
-                p->minValue = std::nullopt;
-                p->maxValue = std::nullopt;
-            }
-        }
-    }
-
     template<typename T>
     static T readParamOrDefault(const ParamDef& p, T defaultValue) {
-        if (const T* val = std::get_if<T>(&p.value)) {
-            return *val;
+        if (!p.value.isValid()) {
+            return defaultValue;
         }
+        
+        // Spezialisierung für uint32_t (häufigster Fall für Timer/Zahlen)
+        if constexpr (std::is_same_v<T, uint32_t>) {
+            if (p.value.isType(ParameterType::TIME_MILLISECONDS)) {
+                return p.value.getTimeMilliseconds();
+            }
+            if (p.value.isType(ParameterType::TIME_SECONDS)) {
+                return p.value.getTimeSeconds();
+            }
+            if (p.value.isType(ParameterType::GENERIC_INT)) {
+                return static_cast<uint32_t>(p.value.getGenericInt());
+            }
+            if (p.value.isType(ParameterType::RPM)) {
+                return p.value.getRPM();
+            }
+            if (p.value.isType(ParameterType::FLOW_RATE)) {
+                return p.value.getFlowRate();
+            }
+        }
+        // Spezialisierung für bool
+        else if constexpr (std::is_same_v<T, bool>) {
+            if (p.value.isType(ParameterType::BOOLEAN)) {
+                return p.value.getBoolean();
+            }
+        }
+        // Spezialisierung für float
+        else if constexpr (std::is_same_v<T, float>) {
+            if (p.value.isType(ParameterType::PERCENTAGE)) {
+                return p.value.getPercentage();
+            }
+            if (p.value.isType(ParameterType::HUMIDITY)) {
+                return p.value.getHumidity();
+            }
+            if (p.value.isType(ParameterType::TEMPERATURE)) {
+                return p.value.getTemperature(TemperatureUnit::CELSIUS);
+            }
+        }
+        // Spezialisierung für int32_t
+        else if constexpr (std::is_same_v<T, int32_t>) {
+            if (p.value.isType(ParameterType::GENERIC_INT)) {
+                return p.value.getGenericInt();
+            }
+        }
+        
         return defaultValue;
     }
 

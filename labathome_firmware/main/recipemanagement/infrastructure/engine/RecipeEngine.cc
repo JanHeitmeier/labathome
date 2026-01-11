@@ -57,8 +57,24 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
         }
         
         // Apply parameters from descriptor to step
-        for (const auto& [key, value] : desc.params) {
-            step->setParamValue(key, value);
+        for (const auto& [key, stringValue] : desc.params) {
+            // Hole Referenz zum ParamDef
+            ParamDef* paramDef = step->findParamDefPtr(key);
+            
+            if (paramDef && paramDef->value.isValid()) {
+                // Parse String basierend auf Type aus Default-Wert
+                ParameterType expectedType = paramDef->value.getType();
+                ParameterValue parsedValue = ParameterValue::parseFromString(stringValue, expectedType);
+                
+                if (parsedValue.isValid()) {
+                    // Direkte Zuweisung zur Referenz
+                    paramDef->value = parsedValue;
+                } else {
+                    ESP_LOGW(TAG, "Failed to parse parameter '%s' = '%s'", key.c_str(), stringValue.c_str());
+                }
+            } else {
+                ESP_LOGW(TAG, "Unknown parameter key: %s", key.c_str());
+            }
         }
         
         m_stepInstances.push_back(std::move(step));

@@ -19,7 +19,7 @@ public:
     ParameterValue read() const override {
         bool state = false;
         if (hal_) state = hal_->GetButtonGreenIsPressed();
-        return state;
+        return ParameterValue::fromBoolean(state);
     }
 
 private:
@@ -41,7 +41,7 @@ public:
     ParameterValue read() const override {
         bool state = false;
         if (hal_) state = hal_->GetButtonRedIsPressed();
-        return state;
+        return ParameterValue::fromBoolean(state);
     }
 
 private:
@@ -64,23 +64,18 @@ public:
         if (!hal_) return;
 
         float duty = 0.0f;
-        //To-Do: Diese viele flexibilität ist explizit nicht gefordert !!!!!!!!
-        // hal->set(uint16 index, uint16 wert)
-        // Extract float from variant
-        std::visit([&duty](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, float>) {
-                duty = arg;
-            } else if constexpr (std::is_same_v<T, double>) {
-                duty = static_cast<float>(arg);
-            } else if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> ||
-                                 std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>) {
-                duty = static_cast<float>(arg);
-            } else if constexpr (std::is_same_v<T, bool>) {
-                duty = arg ? 100.0f : 0.0f;
-            }
-            // std::monostate and std::string are ignored (duty remains 0.0f)
-        }, v);
+        
+        // Verwende typsichere Getter der neuen ParameterValue-Architektur
+        if (v.isType(ParameterType::PERCENTAGE)) {
+            duty = v.getPercentage();
+        } else if (v.isType(ParameterType::BOOLEAN)) {
+            duty = v.getBoolean() ? 100.0f : 0.0f;
+        } else if (v.isType(ParameterType::RPM)) {
+            // RPM zu Prozent (0-10000 RPM → 0-100%)
+            duty = static_cast<float>(v.getRPM()) / 100.0f;
+        } else if (v.isType(ParameterType::GENERIC_INT)) {
+            duty = static_cast<float>(v.getGenericInt());
+        }
 
         // Clamp to [0, 100]
         duty = std::clamp(duty, 0.0f, 100.0f);
@@ -110,26 +105,14 @@ public:
     void write(const ParameterValue& v) override {
         if (!hal_) return;
 
-        // Accept either a uint32_t color value or turn off if 0/false
+        // Verwende typsichere Getter der neuen ParameterValue-Architektur
         uint32_t color = 0;
         
-        std::visit([&color](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, uint32_t>) {
-                color = arg;
-            } else if constexpr (std::is_same_v<T, int32_t>) {
-                color = static_cast<uint32_t>(arg);
-            } else if constexpr (std::is_same_v<T, uint64_t>) {
-                color = static_cast<uint32_t>(arg);
-            } else if constexpr (std::is_same_v<T, int64_t>) {
-                color = static_cast<uint32_t>(arg);
-            } else if constexpr (std::is_same_v<T, bool>) {
-                color = arg ? 0xFFFFFF : 0x000000; // White on true, off on false
-            } else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
-                color = static_cast<uint32_t>(arg);
-            }
-            // std::monostate and std::string are ignored (color remains 0)
-        }, v);
+        if (v.isType(ParameterType::GENERIC_INT)) {
+            color = static_cast<uint32_t>(v.getGenericInt());
+        } else if (v.isType(ParameterType::BOOLEAN)) {
+            color = v.getBoolean() ? 0xFFFFFFFF : 0x00000000; // White on true, off on false
+        }
 
         hal_->ColorizeLed(index_, color);
     }

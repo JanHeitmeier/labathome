@@ -343,7 +343,6 @@ private:
                 }
             }
             
-            desc.repeatCount = 1;
             steps.push_back(desc);
         }
         r.setSteps(steps);

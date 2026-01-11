@@ -544,6 +544,169 @@ public:
     }
     
     // ========================================================================
+    // STRING PARSING (für JSON/Storage → ParameterValue Konvertierung)
+    // ========================================================================
+    
+    /**
+     * @brief Parse String zu ParameterValue basierend auf erwartetem Type
+     * 
+     * Diese Methode wird von RecipeEngine verwendet um String-Parameter
+     * aus JSON/Storage in typisierte ParameterValue Objekte zu konvertieren.
+     * 
+     * @param valueStr String-Darstellung des Werts (z.B. "2500", "true", "25.5")
+     * @param expectedType Der erwartete ParameterType
+     * @return Geparster ParameterValue oder ungültiger Wert bei Fehler
+     */
+    static ParameterValue parseFromString(const std::string& valueStr, ParameterType expectedType) {
+        // Leere Strings returnen ungültigen Wert
+        if (valueStr.empty()) {
+            return ParameterValue();
+        }
+        
+        switch (expectedType) {
+            case ParameterType::BOOLEAN:
+                return fromBoolean(valueStr == "true" || valueStr == "1");
+            
+            case ParameterType::TIME_MILLISECONDS: {
+                char* end;
+                unsigned long val = std::strtoul(valueStr.c_str(), &end, 10);
+                if (end == valueStr.c_str()) return ParameterValue(); // Parse-Fehler
+                return fromTimeMilliseconds(static_cast<uint32_t>(val));
+            }
+            
+            case ParameterType::TIME_SECONDS: {
+                char* end;
+                unsigned long val = std::strtoul(valueStr.c_str(), &end, 10);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromTimeSeconds(static_cast<uint32_t>(val));
+            }
+            
+            case ParameterType::PERCENTAGE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromPercentage(val);
+            }
+            
+            case ParameterType::RPM: {
+                char* end;
+                unsigned long val = std::strtoul(valueStr.c_str(), &end, 10);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromRPM(static_cast<uint32_t>(val));
+            }
+            
+            case ParameterType::GENERIC_INT: {
+                char* end;
+                long val = std::strtol(valueStr.c_str(), &end, 10);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromGenericInt(static_cast<int32_t>(val));
+            }
+            
+            case ParameterType::TEMPERATURE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromTemperature(val, TemperatureUnit::CELSIUS);
+            }
+            
+            case ParameterType::PRESSURE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromPressure(val, PressureUnit::KILOPASCAL);
+            }
+            
+            case ParameterType::HUMIDITY: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromHumidity(val);
+            }
+            
+            case ParameterType::FLOW_RATE: {
+                char* end;
+                unsigned long val = std::strtoul(valueStr.c_str(), &end, 10);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromFlowRate(static_cast<uint32_t>(val));
+            }
+            
+            case ParameterType::VOLUME: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromVolume(val, VolumeUnit::MILLILITER);
+            }
+            
+            case ParameterType::MASS: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromMass(val, MassUnit::GRAM);
+            }
+            
+            case ParameterType::LENGTH: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromLength(val, LengthUnit::MILLIMETER);
+            }
+            
+            case ParameterType::VOLTAGE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromVoltage(val, VoltageUnit::VOLT);
+            }
+            
+            case ParameterType::CURRENT: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromCurrent(val, CurrentUnit::MILLIAMPERE);
+            }
+            
+            case ParameterType::POWER: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromPower(val, PowerUnit::WATT);
+            }
+            
+            case ParameterType::CONCENTRATION: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromConcentration(val, ConcentrationUnit::GRAM_PER_LITER);
+            }
+            
+            case ParameterType::PH_VALUE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromPH(val);
+            }
+            
+            case ParameterType::VELOCITY: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromVelocity(val, VelocityUnit::MM_PER_SECOND);
+            }
+            
+            case ParameterType::ANGLE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromAngle(val);
+            }
+            
+            case ParameterType::NONE:
+            default:
+                return ParameterValue();
+        }
+    }
+    
+    // ========================================================================
     // TYPE-CHECKING UND METADATEN
     // ========================================================================
     
