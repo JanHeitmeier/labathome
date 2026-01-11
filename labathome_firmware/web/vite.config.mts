@@ -1,10 +1,18 @@
 import { defineConfig} from 'vite'
 import { viteSingleFile } from "@klaus-liebler/vite-single-file"
 import fs from "node:fs"
+import path from "node:path"
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
   return {
+    resolve: {
+      alias: {
+        "@generated/usersettings_ts": path.resolve(__dirname, "../../../generated/usersettings_ts"),
+        "@generated/runtimeconfig_ts": path.resolve(__dirname, "../../../generated/runtimeconfig_ts"),
+        "@generated/flatbuffers_ts": path.resolve(__dirname, "../../../generated/flatbuffers_ts"),
+      }
+    },
     plugins: [viteSingleFile(),],//removeViteModuleLoader=true for viteSingleFile had no effect on bundle size
     build: {
       //minify: false,

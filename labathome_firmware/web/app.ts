@@ -17,11 +17,10 @@ let app: c.AppController;
 document.addEventListener("DOMContentLoaded", (e) => {
   app = new c.AppController("Lab@Home WebUI", CONST.WS_URL, GOOGLE_API_KEY, true, `:: Board ${CFG.BOARD_NAME} created at  ${CFG.CREATION_DT_STR} `);
   app.AddScreenController("dashboard", new RegExp("^/$"), html`<span>&#127760;</span><span>Home</span>`, new c.DefaultScreenController(app))
-  app.AddScreenController("fbd", new RegExp("^/fbd$"), html`<span>🥽</span><span>Function Block</span>`, new c.DevelopCFCController(app))
-  app.AddScreenController("heater", new RegExp("^/heater$"), html`<span>🥽</span><span>Control Heater</span>`, new c.HeaterExperimentController(app))
-  app.AddScreenController("system", new RegExp("^/system$"), html`<span>🧰</span><span>System Settings</span>`, new c.SystemController(app))
-  app.AddScreenController("settings", new RegExp("^/settings$"), html`<span>⌘</span><span>Settings</span>`, new c.UsersettingsController(app, usersettings.Build(CFG.BOARD_NAME, CFG.BOARD_VERSION, [])))
-  app.AddScreenController("wifiman", new RegExp("^/wifiman$"), html`<span>📶</span><span>Wifi Manager</span>`, new c.WifimanagerController(app))
+  app.AddScreenController("liveview", new RegExp("^/liveview$"), html`<span>👁️</span><span>Live View</span>`, new c.LiveViewController(app))
+  app.AddScreenController("recipes", new RegExp("^/recipes$"), html`<span>📝</span><span>Recipes</span>`, new c.RecipeEditorController(app))
+  app.AddScreenController("analytics", new RegExp("^/analytics$"), html`<span>📊</span><span>Analytics</span>`, new c.AnalyticsController(app))
+  app.AddScreenController("settings", new RegExp("^/settings$"), html`<span>⚙️</span><span>Settings</span>`, new c.CombinedSettingsController(app))
   app.Startup();
 });
 

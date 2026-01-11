@@ -226,7 +226,7 @@ void DeviceManager::EternalLoop(){
     cmd.command = "start_recipe";
     cmd.payload = TEST_JSON_TWO;
     
-    m_recipeService->handleCommand(cmd);
+   // m_recipeService->handleCommand(cmd);
 
     while (true)
     {
