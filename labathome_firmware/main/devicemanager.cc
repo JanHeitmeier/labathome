@@ -178,6 +178,7 @@ iHAL *DeviceManager::GetHAL()
     return this->hal;
 }
 
+
 void DeviceManager::EternalLoop(){   
     ESP_LOGE(TAG, "========== CHECKPOINT 1: PLC Manager started ==========");
     TickType_t xLastWakeTime;
@@ -190,47 +191,10 @@ void DeviceManager::EternalLoop(){
     hal->GreetUserOnStartup();
     modbus::ModbusSetup(hal);
     
-    // TEST: Load and start test recipe via Command
-    const char* TEST_JSON_ONE = R"({
-      "id": "test_recipe_001",
-      "name": "LED Button Test Recipe",
-      "steps": [
-        {"stepTypeId": "0x0001", "systemId": "step_red_led", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
-        {"stepTypeId": "0x0002", "systemId": "step_yellow_green", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}},
-        {"stepTypeId": "0x0003", "systemId": "step_two_leds", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}}
-      ]
-    })";
-    
-    const char* TEST_JSON_TWO = R"({
-      "id": "test_recipe_002",
-      "name": "Red-Yellow Alternating Test",
-      "steps": [
-        {"stepTypeId": "0x0001", "systemId": "step_red_led_1", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
-        {"stepTypeId": "0x0002", "systemId": "step_yellow_green_1", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}},
-        {"stepTypeId": "0x0001", "systemId": "step_red_led_2", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
-        {"stepTypeId": "0x0002", "systemId": "step_yellow_green_2", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}}
-      ]
-    })";
-    
-    const char* TEST_JSON_THREE = R"({
-      "id": "test_recipe_003",
-      "name": "Two-LEDs with Red in Between",
-      "steps": [
-        {"stepTypeId": "0x0003", "systemId": "step_two_leds_1", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}},
-        {"stepTypeId": "0x0001", "systemId": "step_red_led", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
-        {"stepTypeId": "0x0003", "systemId": "step_two_leds_2", "aliases": {"LEDRed": "LED2", "LEDGreen": "LED3", "RedButton": "RedButton", "GreenButton": "GreenButton"}}
-      ]
-    })";
-    
-    CommandDto cmd;
-    cmd.command = "start_recipe";
-    cmd.payload = TEST_JSON_TWO;
-    
-   // m_recipeService->handleCommand(cmd);
-
     while (true)
     {
         xTaskDelayUntil(&xLastWakeTime, xFrequency);
+        
         ESP_LOGD(TAG, "CheckForNewExecutable");
         ESP_LOGD(TAG, "BeforeLoop");
         hal->BeforeLoop();
@@ -550,6 +514,25 @@ ErrorCode DeviceManager::CheckForNewExecutable()
 
 ErrorCode DeviceManager::Loop()
 {
+    // //TEST: Load and start test recipe via Command
+    
+    // const char* TEST_JSON = R"({
+    //   "id": "test_recipe_002",
+    //   "name": "Red-Yellow Alternating Test",
+    //   "steps": [
+    //     {"stepTypeId": "0x0001", "systemId": "step_red_led_1", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
+    //     {"stepTypeId": "0x0002", "systemId": "step_yellow_green_1", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}}
+    //     ]
+    // })";
+    // if(!m_testCommandSent){
+    //     CommandDto cmd;
+    //     cmd.command = "start_recipe";
+    //     cmd.payload = TEST_JSON;
+    //     m_recipeService->handleCommand(cmd);
+    //     m_testCommandSent = true;
+    // }
+    
+
     static uint32_t lastLoopMs = 0;
     uint32_t now = hal->GetMillis();
     

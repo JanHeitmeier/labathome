@@ -154,6 +154,7 @@ class DeviceManager:public FBContext
         IRecipeStorage* m_recipeStorage;
         RecipeEngine* m_recipeEngine;
         RecipeApplicationService* m_recipeService;
+        bool m_testCommandSent = false;
 
         void EternalLoop();
         ErrorCode CheckForNewExecutable();

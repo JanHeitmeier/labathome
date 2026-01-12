@@ -111,7 +111,7 @@ async function flashFirmware(cb: gulp.TaskFunctionCallback){
   const c = await Context.get(contextConfig)
   if(c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED){
     await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
-    return idf.flashEncryptedFirmware(c, true, true, false); // <-- First boolean to true for overwriting wifi settings
+    return idf.flashEncryptedFirmware(c, false, true, false); // <-- First boolean to true for overwriting wifi settings
   }else{
     return idf.flashFirmware(c, true, false);
   }

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+// Nach Entwurf von Ki für mehrere Einheiten umgesetzt.
+
 //Keine Heap-Allocations
 //Nur 5 Bytes pro Objekt (uint32_t + uint8_t)
 //Inline-Funktionen
@@ -545,7 +547,6 @@ public:
     
     // ========================================================================
     // STRING PARSING (für JSON/Storage → ParameterValue Konvertierung)
-    // ========================================================================
     
     /**
      * @brief Parse String zu ParameterValue basierend auf erwartetem Type
