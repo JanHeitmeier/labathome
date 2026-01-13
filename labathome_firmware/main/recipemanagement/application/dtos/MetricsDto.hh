@@ -5,7 +5,7 @@
 #include <cstdint>
 
 struct MetricDataPointDto {
-    uint64_t timestamp;     // Unix-Timestamp (ms)
+    uint64_t timestamp;
     float value;
 };
 
@@ -15,9 +15,7 @@ struct MetricSeriesDto {
     std::vector<MetricDataPointDto> data;
 };
 
-/**
- * @brief Sensor-/Messwerte für Graphen (ausgehend: Backend → Frontend)
- */
+// BACKEND → FRONTEND
 struct MetricsDto {
     std::string recipeId;
     std::vector<MetricSeriesDto> series;

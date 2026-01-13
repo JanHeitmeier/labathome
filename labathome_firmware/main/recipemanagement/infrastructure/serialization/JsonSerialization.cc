@@ -3,6 +3,7 @@
 #include "../third_party/rapidjson/writer.h"
 #include "../third_party/rapidjson/stringbuffer.h"
 #include <cstring>
+#include <esp_log.h>
 
 // ========== Serialisierung mit Buffer (DTO → JSON, Zero-Allocation) ==========
 
@@ -135,6 +136,8 @@ bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* bu
             writer.String(io.valueType.c_str());
             writer.Key("description");
             writer.String(io.description.c_str());
+            writer.Key("defaultPhysicalName");
+            writer.String(io.defaultPhysicalName.c_str());
             writer.EndObject();
         }
         writer.EndArray();
@@ -238,6 +241,14 @@ bool JsonSerialization::serializeToBuffer(const RecipeDto& dto, char* buffer, si
         }
         writer.EndObject();
         
+        writer.Key("aliases");
+        writer.StartObject();
+        for (const auto& [key, value] : step.aliases) {
+            writer.Key(key.c_str());
+            writer.String(value.c_str());
+        }
+        writer.EndObject();
+        
         writer.EndObject();
     }
     writer.EndArray();
@@ -321,38 +332,91 @@ std::string JsonSerialization::serialize(const LiveViewDto& dto) {
 }
 
 std::string JsonSerialization::serialize(const AvailableStepsDto& dto) {
-    char buffer[8192];  // Größerer Buffer für Step-Metadaten
-    size_t length;
-    if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
-        return std::string(buffer, length);
+    ESP_LOGI("JsonSerialization", "serialize(AvailableStepsDto) with %d steps", dto.steps.size());
+    
+    // Heap allocation to avoid stack overflow (8KB is too large for stack)
+    constexpr size_t BUFFER_SIZE = 8192;
+    char* buffer = new(std::nothrow) char[BUFFER_SIZE];
+    if (!buffer) {
+        ESP_LOGE("JsonSerialization", "Failed to allocate buffer!");
+        return "";
     }
+    
+    size_t length;
+    bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, length);
+    
+    if (success) {
+        ESP_LOGI("JsonSerialization", "Serialized successfully: %d bytes", length);
+        std::string result(buffer, length);
+        delete[] buffer;
+        return result;
+    }
+    
+    ESP_LOGE("JsonSerialization", "Serialization FAILED!");
+    delete[] buffer;
     return "";
 }
 
 std::string JsonSerialization::serialize(const RecipeListDto& dto) {
-    char buffer[4096];
-    size_t length;
-    if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
-        return std::string(buffer, length);
+    constexpr size_t BUFFER_SIZE = 4096;
+    char* buffer = new(std::nothrow) char[BUFFER_SIZE];
+    if (!buffer) {
+        ESP_LOGE("JsonSerialization", "Failed to allocate buffer for RecipeListDto!");
+        return "";
     }
+    
+    size_t length;
+    bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, length);
+    
+    if (success) {
+        std::string result(buffer, length);
+        delete[] buffer;
+        return result;
+    }
+    
+    delete[] buffer;
     return "";
 }
 
 std::string JsonSerialization::serialize(const RecipeDto& dto) {
-    char buffer[8192];  // Größerer Buffer für komplette Rezepte
-    size_t length;
-    if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
-        return std::string(buffer, length);
+    constexpr size_t BUFFER_SIZE = 8192;
+    char* buffer = new(std::nothrow) char[BUFFER_SIZE];
+    if (!buffer) {
+        ESP_LOGE("JsonSerialization", "Failed to allocate buffer for RecipeDto!");
+        return "";
     }
+    
+    size_t length;
+    bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, length);
+    
+    if (success) {
+        std::string result(buffer, length);
+        delete[] buffer;
+        return result;
+    }
+    
+    delete[] buffer;
     return "";
 }
 
 std::string JsonSerialization::serialize(const MetricsDto& dto) {
-    char buffer[8192];  // Größerer Buffer für historische Sensor-Daten
-    size_t length;
-    if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
-        return std::string(buffer, length);
+    constexpr size_t BUFFER_SIZE = 8192;
+    char* buffer = new(std::nothrow) char[BUFFER_SIZE];
+    if (!buffer) {
+        ESP_LOGE("JsonSerialization", "Failed to allocate buffer for MetricsDto!");
+        return "";
     }
+    
+    size_t length;
+    bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, length);
+    
+    if (success) {
+        std::string result(buffer, length);
+        delete[] buffer;
+        return result;
+    }
+    
+    delete[] buffer;
     return "";
 }
 
@@ -371,6 +435,20 @@ bool JsonSerialization::deserialize(std::string_view json, CommandDto& outDto) {
     }
     
     outDto.command = doc["command"].GetString();
+    
+    // recipeId ist optional
+    if (doc.HasMember("recipeId") && doc["recipeId"].IsString()) {
+        outDto.recipeId = doc["recipeId"].GetString();
+    } else {
+        outDto.recipeId.clear();
+    }
+    
+    // requestId ist optional (für Request/Response-Matching)
+    if (doc.HasMember("requestId") && doc["requestId"].IsString()) {
+        outDto.requestId = doc["requestId"].GetString();
+    } else {
+        outDto.requestId.clear();
+    }
     
     // Payload ist optional
     if (doc.HasMember("payload")) {
@@ -408,6 +486,19 @@ bool JsonSerialization::deserialize(std::string_view json, RecipeDto& outDto) {
     if (!doc.HasMember("description") || !doc["description"].IsString()) return false;
     outDto.description = doc["description"].GetString();
     
+    // Optional: author and version
+    if (doc.HasMember("author") && doc["author"].IsString()) {
+        outDto.author = doc["author"].GetString();
+    } else {
+        outDto.author = "";
+    }
+    
+    if (doc.HasMember("version") && doc["version"].IsString()) {
+        outDto.version = doc["version"].GetString();
+    } else {
+        outDto.version = "1.0";
+    }
+    
     // Steps-Array
     if (!doc.HasMember("steps") || !doc["steps"].IsArray()) return false;
     
@@ -433,6 +524,16 @@ bool JsonSerialization::deserialize(std::string_view json, RecipeDto& outDto) {
             for (auto it = paramsObj.MemberBegin(); it != paramsObj.MemberEnd(); ++it) {
                 if (it->value.IsString()) {
                     step.parameters[it->name.GetString()] = it->value.GetString();
+                }
+            }
+        }
+        
+        // Aliases-Map
+        if (stepJson.HasMember("aliases") && stepJson["aliases"].IsObject()) {
+            const auto& aliasesObj = stepJson["aliases"].GetObject();
+            for (auto it = aliasesObj.MemberBegin(); it != aliasesObj.MemberEnd(); ++it) {
+                if (it->value.IsString()) {
+                    step.aliases[it->name.GetString()] = it->value.GetString();
                 }
             }
         }

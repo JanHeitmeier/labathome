@@ -88,6 +88,7 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
     m_elapsedMs = 0;
     m_state = RecipeEngineState::Loaded;
     ESP_LOGI(TAG, "Recipe loaded: id=%s, steps=%zu", recipeId.c_str(), steps.size());
+    notifyStateChange();
     return true;
 }
 
@@ -107,6 +108,7 @@ bool RecipeEngine::start() {
     
     m_state = RecipeEngineState::Running;
     ESP_LOGI(TAG, "Recipe started");
+    notifyStateChange();
     return true;
 }
 
@@ -118,6 +120,7 @@ bool RecipeEngine::pause() {
     
     m_state = RecipeEngineState::Paused;
     ESP_LOGI(TAG, "Recipe paused");
+    notifyStateChange();
     return true;
 }
 
@@ -129,6 +132,7 @@ bool RecipeEngine::resume() {
     
     m_state = RecipeEngineState::Running;
     ESP_LOGI(TAG, "Recipe resumed");
+    notifyStateChange();
     return true;
 }
 
@@ -154,6 +158,7 @@ bool RecipeEngine::stop() {
     m_currentUserInstruction.clear();
     m_state = RecipeEngineState::Idle;
     ESP_LOGI(TAG, "Recipe stopped");
+    notifyStateChange();
     return true;
 }
 
@@ -195,6 +200,7 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
     if (ctx->isAwaitingAcknowledgment() && !m_waitingForAcknowledgment) {
         m_waitingForAcknowledgment = true;
         m_currentUserInstruction = ctx->getUserInstruction();
+        notifyStateChange();
         ESP_LOGI(TAG, "Step requests acknowledgment: %s", m_currentUserInstruction.c_str());
         return; // Engine pausiert automatisch
     }
@@ -216,6 +222,7 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
 
 void RecipeEngine::advanceToNextStep() {
     m_currentStepIndex++;
+    notifyStateChange();
     
     if (m_currentStepIndex >= m_stepInstances.size()) {
         ESP_LOGI(TAG, "Recipe completed - all steps finished");
@@ -244,7 +251,18 @@ std::string RecipeEngine::getCurrentStepName() const {
 
 float RecipeEngine::getProgress() const {
     if (m_stepInstances.empty()) return 0.0f;
-    return static_cast<float>(m_currentStepIndex) / static_cast<float>(m_stepInstances.size());
+    
+    // If all steps completed, return 100%
+    if (m_currentStepIndex >= m_stepInstances.size()) {
+        return 1.0f;
+    }
+    
+    // Progress calculation: completed steps + 0.5 for the running step
+    // Example with 2 steps:
+    //   Step 0 running (index 0): (0 + 0.5) / 2 = 25%
+    //   Step 1 running (index 1): (1 + 0.5) / 2 = 75%
+    //   All done (index 2): 100%
+    return (static_cast<float>(m_currentStepIndex) + 0.5f) / static_cast<float>(m_stepInstances.size());
 }
 
 void RecipeEngine::acknowledgeStep() {
@@ -257,6 +275,7 @@ void RecipeEngine::acknowledgeStep() {
     m_waitingForAcknowledgment = false;
     m_acknowledgedByUser = true;
     m_currentUserInstruction.clear();
+    notifyStateChange();
     
     // Im nächsten tick() wird ctx.setAcknowledgedState(true) gesetzt
     // und der Step kann dann isAcknowledged() prüfen

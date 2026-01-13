@@ -5,25 +5,24 @@
 
 struct ParameterMetadataDto {
     std::string name;
-    std::string type;           // "int", "float", "string", "bool"
+    std::string type;
     std::string description;
     std::string defaultValue;
-    std::string minValue;       // Min-Wert als String (optional, leer wenn nicht gesetzt)
-    std::string maxValue;       // Max-Wert als String (optional, leer wenn nicht gesetzt)
+    std::string minValue;
+    std::string maxValue;
     bool required;
-    std::string unit;           // Einheit (optional)
+    std::string unit;
 };
 
 struct IoAliasMetadataDto {
     std::string aliasName;
-    std::string ioType;         // "input", "output", oder "sensor"
-    std::string valueType;      // "bool", "int", "float"
+    std::string ioType;
+    std::string valueType;
     std::string description;
+    std::string defaultPhysicalName;
 };
 
-/**
- * @brief Metadaten eines Step-Typs für den Rezept-Editor (ausgehend: Backend → Frontend)
- */
+// BACKEND → FRONTEND
 struct StepMetadataDto {
     std::string typeId;
     std::string displayName;
@@ -33,9 +32,6 @@ struct StepMetadataDto {
     std::vector<IoAliasMetadataDto> ioAliases;
 };
 
-/**
- * @brief Liste aller verfügbaren Step-Typen (ausgehend: Backend → Frontend)
- */
 struct AvailableStepsDto {
     std::vector<StepMetadataDto> steps;
 };

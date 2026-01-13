@@ -54,14 +54,15 @@ struct IoAliasDef {
                         bool isOutput,
                         bool isSensor,
                         std::string valueType = "",
-                        std::optional<ParameterValue> exampleValue = std::nullopt)
+                        std::optional<ParameterValue> exampleValue = std::nullopt,
+                        std::string physicalName = "")
         : aliasName(aliasName), 
           isInput(isInput), 
           isOutput(isOutput), 
           isSensor(isSensor),
           valueType(std::move(valueType)),
           exampleValue(std::move(exampleValue)),
-          physicalName("") {}
+          physicalName(std::move(physicalName)) {}
 
     // Standard-Kopier- und Move-Operationen sind ausreichend
     IoAliasDef(const IoAliasDef&) = default;

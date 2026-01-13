@@ -121,13 +121,19 @@ void RecipeManagementPlugin::send(const LiveViewDto& dto) {
 }
 
 void RecipeManagementPlugin::send(const AvailableStepsDto& dto) {
+    ESP_LOGI(TAG, "send(AvailableStepsDto) called with %d steps", dto.steps.size());
     std::string json = JsonSerialization::serialize(dto);
+    ESP_LOGI(TAG, "Serialized to %d bytes", json.size());
     sendJsonWrapped(json);
+    ESP_LOGI(TAG, "sendJsonWrapped completed");
 }
 
 void RecipeManagementPlugin::send(const AvailableRecipesDto& dto) {
+    ESP_LOGI(TAG, "send(AvailableRecipesDto) called with %d recipes", dto.recipes.size());
     std::string json = JsonSerialization::serialize(dto);
+    ESP_LOGI(TAG, "Serialized to %d bytes", json.size());
     sendJsonWrapped(json);
+    ESP_LOGI(TAG, "sendJsonWrapped completed");
 }
 
 void RecipeManagementPlugin::send(const RecipeDto& dto) {

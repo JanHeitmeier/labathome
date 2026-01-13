@@ -20,8 +20,8 @@ private:
 public:
     RedLedButtonStep()
         : StepBase("RedLedButton", "Turn LED red, wait for red button press, then wait configured time", "1.0"),
-          ledRed("LED", false, true, false, "uint32_t"),
-          btnRed("RedButton", true, false, true, "bool"),
+          ledRed("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
+          btnRed("RedButton", true, false, true, "bool", std::nullopt, "RedButton"),
           waitTimeParam("waitTime", 
                         ParameterValue::fromTimeMilliseconds(1000),
                         "Wait Time",
@@ -150,8 +150,8 @@ private:
 public:
     YellowGreenLedButtonStep()
         : StepBase("YellowGreenLedButton", "LED yellow for configured time, green on button, off on second button", "1.0"),
-          ledYellow("LED", false, true, false, "uint32_t"),
-          btnGreen("GreenButton", true, false, true, "bool"),
+          ledYellow("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
+          btnGreen("GreenButton", true, false, true, "bool", std::nullopt, "GreenButton"),
           yellowTimeParam("yellowTime",
                           ParameterValue::fromTimeMilliseconds(2000),
                           "Yellow Duration",
@@ -308,10 +308,10 @@ private:
 public:
     TwoLedTwoButtonStep()
         : StepBase("TwoLedTwoButton", "Red+Green LEDs on, both buttons pressed to finish", "1.0"),
-          ledRed("LEDRed", false, true, false, "uint32_t"),
-          ledGreen("LEDGreen", false, true, false, "uint32_t"),
-          btnRed("RedButton", true, false, true, "bool"),
-          btnGreen("GreenButton", true, false, true, "bool")
+          ledRed("LEDRed", false, true, false, "uint32_t", std::nullopt, "LED0"),
+          ledGreen("LEDGreen", false, true, false, "uint32_t", std::nullopt, "LED1"),
+          btnRed("RedButton", true, false, true, "bool", std::nullopt, "RedButton"),
+          btnGreen("GreenButton", true, false, true, "bool", std::nullopt, "GreenButton")
     {
         registerIoAliases({&ledRed, &ledGreen, &btnRed, &btnGreen});
     }

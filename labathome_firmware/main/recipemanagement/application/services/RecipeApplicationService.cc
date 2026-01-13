@@ -5,8 +5,7 @@
 #include "../../core/domain/entities/Recipe.hh"
 #include <esp_log.h>
 #include <ctime>
-
-//ToDos von Ki Claude Sonnect 4.5 generiert
+#include <cinttypes>
 
 RecipeApplicationService::RecipeApplicationService(
     IRecipeStorage* storage,
@@ -16,6 +15,13 @@ RecipeApplicationService::RecipeApplicationService(
     m_storageManager(new RecipeStorageManager(storage)),
     m_engine(engine), 
     m_gateway(gateway) {
+    
+    // Register state change callback to send live view updates
+    if (m_engine) {
+        m_engine->setStateChangeCallback([this]() {
+            this->sendLiveViewUpdate();
+        });
+    }
 }
 
 RecipeApplicationService::~RecipeApplicationService() {
@@ -28,6 +34,8 @@ void RecipeApplicationService::setMessageGateway(IMessageGateway* gateway) {
 
 void RecipeApplicationService::handleCommand(const CommandDto& dto) {
     const std::string& cmd = dto.command;
+    
+    ESP_LOGI("RecipeAppService", "handleCommand: %s", cmd.c_str());
     
     if (cmd == "start_recipe") {
         // Wenn payload vorhanden, ist es ein komplettes JSON-Rezept zum Speichern und Starten
@@ -121,20 +129,57 @@ void RecipeApplicationService::handleStartRecipeFromJson(const std::string& json
 }
 
 void RecipeApplicationService::handleStartRecipe(const std::string& recipeId) {
-    if (!m_engine || !m_storage) return;
+    ESP_LOGI("RecipeAppService", "handleStartRecipe called for ID: %s", recipeId.c_str());
     
-    // TODO: Rezept aus Storage laden
-    // auto recipeOpt = m_storage->loadRecipe(recipeId);
-    // if (!recipeOpt) {
-    //     // Fehler: Rezept nicht gefunden
-    //     return;
-    // }
+    if (!m_storageManager || !m_engine) {
+        ESP_LOGE("RecipeAppService", "StorageManager or Engine is NULL!");
+        return;
+    }
     
-    // TODO: Rezept in Engine laden und starten
-    // m_engine->loadRecipe(*recipeOpt);
-    // m_engine->start();
+    // Convert string ID to uint32_t hash for storage lookup
+    uint32_t recipeIdHash = 0;
+    for (char c : recipeId) {
+        recipeIdHash = recipeIdHash * 31 + static_cast<uint32_t>(c);
+    }
     
-    // Live-View Update senden
+    ESP_LOGI("RecipeAppService", "Looking for recipe with hash: 0x%08" PRIx32, recipeIdHash);
+    
+    // Load recipe JSON from storage
+    auto recipeJsonOpt = m_storageManager->getJsonRecipe(recipeIdHash);
+    if (!recipeJsonOpt.has_value()) {
+        ESP_LOGE("RecipeAppService", "Recipe not found in storage: %s (hash: 0x%08" PRIx32 ")", recipeId.c_str(), recipeIdHash);
+        return;
+    }
+    
+    ESP_LOGI("RecipeAppService", "Recipe JSON loaded, parsing to StepDescriptors...");
+    
+    // Parse JSON to StepInstanceDescriptor list
+    std::vector<StepInstanceDescriptor> stepDescriptors;
+    RecipeParser parser;
+    if (!parser.parseJsonToStepDescriptors(recipeJsonOpt.value(), stepDescriptors)) {
+        ESP_LOGE("RecipeAppService", "Failed to parse recipe JSON to StepDescriptors");
+        return;
+    }
+    
+    ESP_LOGI("RecipeAppService", "Parsed %d steps, loading into RecipeEngine...", stepDescriptors.size());
+    
+    // Load recipe into engine
+    if (!m_engine->loadRecipe(stepDescriptors, recipeId)) {
+        ESP_LOGE("RecipeAppService", "Failed to load recipe into engine");
+        return;
+    }
+    
+    ESP_LOGI("RecipeAppService", "Recipe loaded, starting execution...");
+    
+    // Start recipe execution
+    if (!m_engine->start()) {
+        ESP_LOGE("RecipeAppService", "Failed to start recipe execution");
+        return;
+    }
+    
+    ESP_LOGI("RecipeAppService", "✅ Recipe started successfully: %s", recipeId.c_str());
+    
+    // Send live-view update to show running state
     sendLiveViewUpdate();
 }
 
@@ -173,37 +218,56 @@ void RecipeApplicationService::handleAcknowledgeStep() {
 }
 
 void RecipeApplicationService::handleGetRecipeList() {
-    if (!m_gateway) return;
+    ESP_LOGI("RecipeAppService", "handleGetRecipeList called");
+    
+    if (!m_gateway) {
+        ESP_LOGE("RecipeAppService", "Gateway is NULL!");
+        return;
+    }
     
     AvailableRecipesDto dto = buildAvailableRecipesDto();
+    ESP_LOGI("RecipeAppService", "Built DTO with %d recipes, sending...", dto.recipes.size());
     m_gateway->send(dto);
+    ESP_LOGI("RecipeAppService", "AvailableRecipesDto sent");
 }
 
 void RecipeApplicationService::handleGetAvailableSteps() {
-    if (!m_gateway) return;
+    ESP_LOGI("RecipeAppService", "handleGetAvailableSteps called");
     
-    // StepTypeRegistry nach DTOs fragen
-   // AvailableStepsDto dto = nullptr //StepTypeRegistry::instance().availableTypesAsDto(); Wegen Core Abhängigkeiten Funktion entfernt.
-    //m_gateway->send(dto);
+    if (!m_gateway) {
+        ESP_LOGE("RecipeAppService", "Gateway is NULL!");
+        return;
+    }
+    
+    ESP_LOGI("RecipeAppService", "Building AvailableStepsDto...");
+    AvailableStepsDto dto = buildAvailableStepsDto();
+    
+    ESP_LOGI("RecipeAppService", "Built DTO with %d steps, sending...", dto.steps.size());
+    m_gateway->send(dto);
+    
+    ESP_LOGI("RecipeAppService", "AvailableStepsDto sent");
 }
 
 void RecipeApplicationService::handleSaveRecipe(const std::string& payloadJson) {
-    if (!m_storage || !m_gateway) return;
+    if (!m_storageManager || !m_gateway) return;
     
     // Payload deserialisieren
     RecipeDto recipeDto;
     if (!JsonSerialization::deserialize(payloadJson, recipeDto)) {
-        // Fehler: Ungültiges JSON
+        ESP_LOGE("RecipeAppService", "Failed to deserialize RecipeDto");
         return;
     }
     
-    // TODO: Rezept speichern
-    // bool success = m_storage->saveRecipe(recipeDto);
+    // Rezept als JSON mit String-ID Hash speichern (für Frontend-Kompatibilität)
+    bool success = m_storageManager->saveJsonRecipeWithStringId(payloadJson);
     
-    // Erfolg/Fehler an UI senden
-    // (TODO: Dediziertes Response-DTO oder Status in CommandDto?)
+    if (success) {
+        ESP_LOGI("RecipeAppService", "Recipe saved successfully: %s", recipeDto.id.c_str());
+    } else {
+        ESP_LOGE("RecipeAppService", "Failed to save recipe: %s", recipeDto.id.c_str());
+    }
     
-    // Liste aktualisieren
+    // Liste aktualisieren (damit das Dashboard das neue Rezept sieht)
     handleGetRecipeList();
 }
 
@@ -218,14 +282,33 @@ void RecipeApplicationService::handleDeleteRecipe(const std::string& recipeId) {
 }
 
 void RecipeApplicationService::handleGetRecipe(const std::string& recipeId) {
-    if (!m_storage || !m_gateway) return;
+    ESP_LOGI("RecipeAppService", "handleGetRecipe called for ID: %s", recipeId.c_str());
     
-    // TODO: Rezept laden
-    // auto recipeOpt = m_storage->loadRecipe(recipeId);
-    // if (!recipeOpt) return;
+    if (!m_storageManager || !m_gateway) {
+        ESP_LOGE("RecipeAppService", "StorageManager or Gateway is NULL!");
+        return;
+    }
     
-    // RecipeDto dto = *recipeOpt;
-    // m_gateway->send(dto);
+    // Convert string ID to uint32_t hash for storage lookup
+    uint32_t recipeIdHash = 0;
+    for (char c : recipeId) {
+        recipeIdHash = recipeIdHash * 31 + static_cast<uint32_t>(c);
+    }
+    
+    auto recipeJsonOpt = m_storageManager->getJsonRecipe(recipeIdHash);
+    if (!recipeJsonOpt.has_value()) {
+        ESP_LOGW("RecipeAppService", "Recipe not found: %s (hash: %" PRIx32 ")", recipeId.c_str(), recipeIdHash);
+        return;
+    }
+    
+    RecipeDto dto;
+    if (!JsonSerialization::deserialize(recipeJsonOpt.value(), dto)) {
+        ESP_LOGE("RecipeAppService", "Failed to deserialize recipe: %s", recipeId.c_str());
+        return;
+    }
+    
+    ESP_LOGI("RecipeAppService", "Sending recipe: %s", dto.name.c_str());
+    m_gateway->send(dto);
 }
 
 void RecipeApplicationService::handleGetMetrics() {
@@ -312,33 +395,151 @@ LiveViewDto RecipeApplicationService::buildLiveViewDto() const {
 }
 
 AvailableRecipesDto RecipeApplicationService::buildAvailableRecipesDto() const {
+    ESP_LOGI("RecipeAppService", "Building AvailableRecipesDto...");
     AvailableRecipesDto dto;
     
-    if (!m_storage) return dto;
+    if (!m_storageManager) {
+        ESP_LOGW("RecipeAppService", "StorageManager is NULL, using placeholder data");
+        
+        // Placeholder-Daten
+        RecipeInfoDto recipe1;
+        recipe1.id = "recipe_001";
+        recipe1.name = "Fermentation Process";
+        recipe1.description = "Standard fermentation with temperature control";
+        recipe1.createdAt = 1699200000000;
+        recipe1.lastModified = 1699200000000;
+        dto.recipes.push_back(recipe1);
+        
+        return dto;
+    }
     
-    // TODO: Rezepte aus Storage laden
-    // auto recipeIds = m_storage->getAllRecipeIds();
-    // for (const auto& id : recipeIds) {
-    //     auto recipeOpt = m_storage->loadRecipeMetadata(id);
-    //     if (recipeOpt) {
-    //         RecipeInfoDto info;
-    //         info.id = recipeOpt->id;
-    //         info.name = recipeOpt->name;
-    //         info.description = recipeOpt->description;
-    //         info.createdAt = recipeOpt->createdAt;
-    //         info.lastModified = recipeOpt->lastModified;
-    //         dto.recipes.push_back(info);
-    //     }
-    // }
+    // Get all recipe IDs from storage
+    auto recipeIds = m_storageManager->getAllJsonRecipeIds();
+    ESP_LOGI("RecipeAppService", "Found %d recipes in storage", recipeIds.size());
     
-    // Placeholder-Daten
-    RecipeInfoDto recipe1;
-    recipe1.id = "recipe_001";
-    recipe1.name = "Fermentation Process";
-    recipe1.description = "Standard fermentation with temperature control";
-    recipe1.createdAt = 1699200000000;
-    recipe1.lastModified = 1699200000000;
-    dto.recipes.push_back(recipe1);
+    for (const auto& id : recipeIds) {
+        auto recipeJsonOpt = m_storageManager->getJsonRecipe(id);
+        if (recipeJsonOpt.has_value()) {
+            // Parse minimal metadata from JSON
+            RecipeDto recipeDto;
+            if (JsonSerialization::deserialize(recipeJsonOpt.value(), recipeDto)) {
+                RecipeInfoDto info;
+                info.id = recipeDto.id;
+                info.name = recipeDto.name;
+                info.description = recipeDto.description;
+                info.createdAt = 0; // Could be extracted from ID timestamp
+                info.lastModified = 0;
+                dto.recipes.push_back(info);
+                ESP_LOGI("RecipeAppService", "Added recipe: %s", info.name.c_str());
+            }
+        }
+    }
+    
+    ESP_LOGI("RecipeAppService", "Built DTO with %d recipes", dto.recipes.size());
+    return dto;
+}
+
+AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const {
+    AvailableStepsDto dto;
+    
+    // Hole alle Step-Metadaten von der Registry
+    auto stepMetadataList = StepTypeRegistry::instance().availableTypes();
+    
+    // Konvertiere StepMetadata zu StepMetadataDto
+    for (const auto& meta : stepMetadataList) {
+        StepMetadataDto stepDto;
+        
+        // Konvertiere typeId zu Hex-String (fix: verwende PRIx32 für uint32_t)
+        char typeIdBuf[16];
+        snprintf(typeIdBuf, sizeof(typeIdBuf), "0x%04" PRIx32, meta.typeId);
+        stepDto.typeId = typeIdBuf;
+        
+        stepDto.displayName = meta.displayName;
+        stepDto.description = meta.description;
+        stepDto.category = "General"; // TODO: Category aus Metadata holen wenn vorhanden
+        
+        // Parameter konvertieren
+        for (const auto& param : meta.params) {
+            ParameterMetadataDto paramDto;
+            paramDto.name = param.key;
+            paramDto.description = param.description;
+            paramDto.unit = param.unit;
+            paramDto.required = true;
+            
+            // Type aus ParameterValue ableiten
+            ParameterType pType = param.value.getType();
+            switch (pType) {
+                case ParameterType::TEMPERATURE:
+                case ParameterType::PRESSURE:
+                case ParameterType::HUMIDITY:
+                case ParameterType::PERCENTAGE:
+                case ParameterType::VOLUME:
+                case ParameterType::MASS:
+                case ParameterType::LENGTH:
+                case ParameterType::VOLTAGE:
+                case ParameterType::CURRENT:
+                case ParameterType::POWER:
+                case ParameterType::CONCENTRATION:
+                case ParameterType::PH_VALUE:
+                case ParameterType::VELOCITY:
+                case ParameterType::ANGLE:
+                    paramDto.type = "float";
+                    break;
+                    
+                case ParameterType::BOOLEAN:
+                    paramDto.type = "bool";
+                    break;
+                    
+                default:
+                    paramDto.type = "int";
+                    break;
+            }
+            
+            // Verwende toNumericString() für alle Werte - keine Typ-spezifische Logik mehr!
+            paramDto.defaultValue = param.value.toNumericString();
+            if (param.minValue.has_value()) {
+                paramDto.minValue = param.minValue->toNumericString();
+                ESP_LOGI("RecipeAppService", "Param '%s': minValue = %s", param.key.c_str(), paramDto.minValue.c_str());
+            } else {
+                ESP_LOGI("RecipeAppService", "Param '%s': minValue = NOT SET", param.key.c_str());
+            }
+            if (param.maxValue.has_value()) {
+                paramDto.maxValue = param.maxValue->toNumericString();
+                ESP_LOGI("RecipeAppService", "Param '%s': maxValue = %s", param.key.c_str(), paramDto.maxValue.c_str());
+            } else {
+                ESP_LOGI("RecipeAppService", "Param '%s': maxValue = NOT SET", param.key.c_str());
+            }
+            
+            stepDto.parameters.push_back(paramDto);
+        }
+        
+        // I/O Aliases konvertieren
+        for (const auto& ioAlias : meta.ioAliases) {
+            IoAliasMetadataDto ioDto;
+            ioDto.aliasName = ioAlias.aliasName;
+            ioDto.description = "";
+            ioDto.defaultPhysicalName = ioAlias.physicalName;  // Default physical resource
+            
+            // Type bestimmen
+            if (ioAlias.isInput && ioAlias.isOutput) {
+                ioDto.ioType = "input/output";
+            } else if (ioAlias.isInput) {
+                ioDto.ioType = "input";
+            } else if (ioAlias.isOutput) {
+                ioDto.ioType = "output";
+            } else if (ioAlias.isSensor) {
+                ioDto.ioType = "sensor";
+            } else {
+                ioDto.ioType = "unknown";
+            }
+            
+            ioDto.valueType = ioAlias.valueType;
+            
+            stepDto.ioAliases.push_back(ioDto);
+        }
+        
+        dto.steps.push_back(stepDto);
+    }
     
     return dto;
 }

@@ -10,8 +10,12 @@
 #include <memory>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 
 enum class RecipeEngineState { Idle, Loaded, Running, Paused, Error };
+
+// Callback function type for state change notifications
+using StateChangeCallback = std::function<void()>;
 
 class RecipeEngine {
 public:
@@ -39,6 +43,9 @@ public:
     // User acknowledgment status
     bool isAwaitingAcknowledgment() const { return m_waitingForAcknowledgment; }
     std::string getUserInstruction() const { return m_currentUserInstruction; }
+    
+    // State change notification callback
+    void setStateChangeCallback(StateChangeCallback callback) { m_stateChangeCallback = callback; }
 
 private:
     void buildStepContext(StepContext& ctx, size_t stepIndex);
@@ -60,4 +67,12 @@ private:
     bool m_waitingForAcknowledgment{false};
     bool m_acknowledgedByUser{false};
     std::string m_currentUserInstruction;
+    
+    // State change notification
+    StateChangeCallback m_stateChangeCallback;
+    void notifyStateChange() {
+        if (m_stateChangeCallback) {
+            m_stateChangeCallback();
+        }
+    }
 };

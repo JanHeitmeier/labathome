@@ -3,47 +3,40 @@
 #include <cstdint>
 #include <string>
 
-// Nach Entwurf von Ki für mehrere Einheiten umgesetzt.
+// DESIGN PRINCIPLES:
+// - No heap allocations
+// - 5 bytes per object (uint32_t + uint8_t)
+// - Inline functions
+// - Compact conversion tables
+// - SI units for physical quantities with uint16 range - Is uint32 range but can be changed if needed
+// - Temperature: Kelvin * 10, Pressure: kPa * 10
 
-//Keine Heap-Allocations
-//Nur 5 Bytes pro Objekt (uint32_t + uint8_t)
-//Inline-Funktionen
-//Kompakte Konvertierungstabellen
-
-//uint16 ist für die meisten sensoren an range ausreichend. 
-//druck auch bei 0 ansetzten, druck in Kilopascal, da 65000 schnell überschritten wird sonst. 
-
-//Für physikalische Größen SI-Einheiten, immer uint16 werte temp in zentel schritten (faktor) grad kelvin. Prozent von 0 bis u16int max. 
-//TEmparatur sensor misst temp, datenkapsel enthält zahlen wert und einheit. 
-//TEmperatur immer intern in demselnen typen gespeichert, temp immer float, umdrehung immer int S
-
-
-// Enum für verschiedene physikalische Größenarten
+// PHYSICAL QUANTITY TYPES
 enum class ParameterType : uint8_t {
     NONE = 0,
-    TEMPERATURE,    // Intern in Kelvin * 10 (2731 = 273.1K = 0°C)
-    PRESSURE,       // Intern in Kilopascal * 10 (1013 = 101.3 kPa)
-    HUMIDITY,       // Intern in Prozent * 100 (5000 = 50.00%)
-    RPM,            // Umdrehungen pro Minute (direkt)
-    PERCENTAGE,     // Allgemeiner Prozentsatz * 100 (10000 = 100.00%)
-    TIME_SECONDS,   // Zeit in Sekunden (direkt)
-    TIME_MILLISECONDS, // Zeit in Millisekunden (direkt, max ~49.7 Tage)
-    FLOW_RATE,      // Durchfluss in ml/min (direkt)
-    VOLUME,         // Volumen in ml * 10 (5000 = 500.0 ml)
-    MASS,           // Masse in g * 10 (12345 = 1234.5 g)
-    LENGTH,         // Länge in mm (direkt)
-    VOLTAGE,        // Spannung in V * 100 (1234 = 12.34 V)
-    CURRENT,        // Strom in mA (direkt)
-    POWER,          // Leistung in W * 10 (123 = 12.3 W)
-    CONCENTRATION,  // Konzentration in g/L * 100 (5000 = 50.00 g/L)
-    PH_VALUE,       // pH-Wert * 100 (700 = pH 7.00, Bereich 0-1400)
-    VELOCITY,       // Geschwindigkeit in mm/s (direkt)
-    ANGLE,          // Winkel in Grad * 10 (900 = 90.0°, Bereich 0-3600)
-    BOOLEAN,        // Für bool-Werte (0 oder 1)
-    GENERIC_INT     // Generischer Integer-Wert
+    TEMPERATURE,        // Kelvin * 10 (2731 = 273.1K = 0°C)
+    PRESSURE,           // Kilopascal * 10 (1013 = 101.3 kPa)
+    HUMIDITY,           // Percent * 100 (5000 = 50.00%)
+    RPM,                // Revolutions per minute
+    PERCENTAGE,         // Percent * 100 (10000 = 100.00%)
+    TIME_SECONDS,       // Seconds
+    TIME_MILLISECONDS,  // Milliseconds (max ~49.7 days)
+    FLOW_RATE,          // ml/min
+    VOLUME,             // ml * 10 (5000 = 500.0 ml)
+    MASS,               // g * 10 (12345 = 1234.5 g)
+    LENGTH,             // mm
+    VOLTAGE,            // V * 100 (1234 = 12.34 V)
+    CURRENT,            // mA
+    POWER,              // W * 10 (123 = 12.3 W)
+    CONCENTRATION,      // g/L * 100 (5000 = 50.00 g/L)
+    PH_VALUE,           // pH * 100 (700 = pH 7.00, range 0-1400)
+    VELOCITY,           // mm/s
+    ANGLE,              // Degrees * 10 (900 = 90.0°, range 0-3600)
+    BOOLEAN,            // bool (0 or 1)
+    GENERIC_INT         // Generic integer value
 };
 
-// Enum für verschiedene Temperatur-Einheiten
+// TEMPERATURE UNITS
 enum class TemperatureUnit : uint8_t {
     KELVIN,
     CELSIUS,
@@ -780,6 +773,57 @@ public:
     // ========================================================================
     // STRING-KONVERTIERUNG
     // ========================================================================
+    
+    // Gibt nur den numerischen Wert als String zurück (ohne Unit)
+    std::string toNumericString(TemperatureUnit tempUnit = TemperatureUnit::CELSIUS,
+                               PressureUnit pressUnit = PressureUnit::KILOPASCAL) const {
+        if (m_type == ParameterType::NONE) return "";
+        
+        switch (m_type) {
+            case ParameterType::TEMPERATURE:
+                return std::to_string(getTemperature(tempUnit));
+            case ParameterType::PRESSURE:
+                return std::to_string(getPressure(pressUnit));
+            case ParameterType::HUMIDITY:
+                return std::to_string(getHumidity());
+            case ParameterType::RPM:
+                return std::to_string(getRPM());
+            case ParameterType::PERCENTAGE:
+                return std::to_string(getPercentage());
+            case ParameterType::BOOLEAN:
+                return getBoolean() ? "true" : "false";
+            case ParameterType::TIME_SECONDS:
+                return std::to_string(getTimeSeconds());
+            case ParameterType::FLOW_RATE:
+                return std::to_string(getFlowRate());
+            case ParameterType::GENERIC_INT:
+                return std::to_string(getGenericInt());
+            case ParameterType::TIME_MILLISECONDS:
+                return std::to_string(getTimeMilliseconds());
+            case ParameterType::VOLUME:
+                return std::to_string(getVolume());
+            case ParameterType::MASS:
+                return std::to_string(getMass());
+            case ParameterType::LENGTH:
+                return std::to_string(getLength());
+            case ParameterType::VOLTAGE:
+                return std::to_string(getVoltage());
+            case ParameterType::CURRENT:
+                return std::to_string(getCurrent());
+            case ParameterType::POWER:
+                return std::to_string(getPower());
+            case ParameterType::CONCENTRATION:
+                return std::to_string(getConcentration());
+            case ParameterType::PH_VALUE:
+                return std::to_string(getPH());
+            case ParameterType::VELOCITY:
+                return std::to_string(getVelocity());
+            case ParameterType::ANGLE:
+                return std::to_string(getAngle());
+            default:
+                return "";
+        }
+    }
     
     std::string toString(TemperatureUnit tempUnit = TemperatureUnit::CELSIUS,
                         PressureUnit pressUnit = PressureUnit::KILOPASCAL) const {

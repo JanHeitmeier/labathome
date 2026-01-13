@@ -2,10 +2,15 @@
 
 #include <string>
 
-/**
- * @brief DTO für Befehle von der Web-UI (eingehend: Frontend → Backend)
- * 
- * Unterstützte Befehle:
+// FRONTEND → BACKEND
+struct CommandDto {
+    std::string command;
+    std::string recipeId;
+    std::string payload;
+    std::string requestId;
+};
+/*
+* Unterstützte Befehle:
  * - "start_recipe": Startet ein Rezept
  * - "stop_recipe": Stoppt das laufende Rezept
  * - "pause_recipe": Pausiert das laufende Rezept
@@ -17,9 +22,3 @@
  * - "delete_recipe": Löscht ein Rezept
  * - "get_recipe": Lädt ein spezifisches Rezept
  */
-struct CommandDto {
-    std::string command;
-    std::string recipeId;       // Rezept-ID (für start, delete, get)
-    std::string payload;        // Zusätzliche Daten als JSON (für save_recipe)
-    std::string requestId;      // Für Request/Response-Matching
-};

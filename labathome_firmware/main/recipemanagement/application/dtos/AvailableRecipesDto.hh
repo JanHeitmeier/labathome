@@ -12,9 +12,7 @@ struct RecipeInfoDto {
     uint64_t lastModified;
 };
 
-/**
- * @brief Liste von Rezepten für das Dashboard (ausgehend: Backend → Frontend)
- */
+// BACKEND → FRONTEND
 struct AvailableRecipesDto {
     std::vector<RecipeInfoDto> recipes;
 };

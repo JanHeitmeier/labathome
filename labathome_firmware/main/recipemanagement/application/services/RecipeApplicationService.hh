@@ -13,18 +13,6 @@
 #include <memory>
 #include <string>
 
-/**
- * @brief Application Service für Recipe Management
- * 
- * Dies ist die zentrale Logik-Einheit ("Gehirn") des Recipe Management Systems.
- * Sie koordiniert:
- * - Command-Verarbeitung von der UI
- * - Rezept-CRUD via IRecipeStorage
- * - RecipeEngine-Steuerung
- * - Status-Updates via IMessageGateway
- * 
- * Diese Klasse wird vom DeviceManager instanziiert und verwaltet.
- */
 class RecipeApplicationService {
 public:
     /**
@@ -93,6 +81,7 @@ private:
     // Hilfsmethoden
     LiveViewDto buildLiveViewDto() const;
     AvailableRecipesDto buildAvailableRecipesDto() const;
+    AvailableStepsDto buildAvailableStepsDto() const;
     MetricsDto buildMetricsDto() const;
     
 private:
