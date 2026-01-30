@@ -275,59 +275,6 @@ bool JsonSerialization::serializeToBuffer(const RecipeDto& dto, char* buffer, si
     return true;
 }
 
-bool JsonSerialization::serializeToBuffer(const MetricsDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
-    rapidjson::StringBuffer sb;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
-    
-    writer.StartObject();
-    
-    // recipeId
-    writer.Key("recipeId");
-    writer.String(dto.recipeId.c_str());
-    
-    // series: Array von MetricSeriesDto
-    writer.Key("series");
-    writer.StartArray();
-    for (const auto& series : dto.series) {
-        writer.StartObject();
-        
-        writer.Key("name");
-        writer.String(series.name.c_str());
-        
-        writer.Key("unit");
-        writer.String(series.unit.c_str());
-        
-        // data: Array von MetricDataPointDto
-        writer.Key("data");
-        writer.StartArray();
-        for (const auto& point : series.data) {
-            writer.StartObject();
-            writer.Key("timestamp");
-            writer.Uint64(point.timestamp);
-            writer.Key("value");
-            writer.Double(point.value);
-            writer.EndObject();
-        }
-        writer.EndArray();
-        
-        writer.EndObject();
-    }
-    writer.EndArray();
-    
-    writer.EndObject();
-    
-    if (sb.GetSize() >= bufferSize) {
-        outLength = 0;
-        return false;
-    }
-    
-    std::memcpy(buffer, sb.GetString(), sb.GetSize());
-    buffer[sb.GetSize()] = '\0';
-    outLength = sb.GetSize();
-    
-    return true;
-}
-
 // ========== Serialisierung mit std::string (Convenience-Wrapper) ==========
 
 std::string JsonSerialization::serialize(const LiveViewDto& dto) {
@@ -391,27 +338,6 @@ std::string JsonSerialization::serialize(const RecipeDto& dto) {
     char* buffer = new(std::nothrow) char[BUFFER_SIZE];
     if (!buffer) {
         ESP_LOGE("JsonSerialization", "Failed to allocate buffer for RecipeDto!");
-        return "";
-    }
-    
-    size_t length;
-    bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, length);
-    
-    if (success) {
-        std::string result(buffer, length);
-        delete[] buffer;
-        return result;
-    }
-    
-    delete[] buffer;
-    return "";
-}
-
-std::string JsonSerialization::serialize(const MetricsDto& dto) {
-    constexpr size_t BUFFER_SIZE = 8192;
-    char* buffer = new(std::nothrow) char[BUFFER_SIZE];
-    if (!buffer) {
-        ESP_LOGE("JsonSerialization", "Failed to allocate buffer for MetricsDto!");
         return "";
     }
     
@@ -563,4 +489,113 @@ bool JsonSerialization::deserialize(std::string_view json, RecipeDto& outDto) {
     }
     
     return true;
+}
+
+bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+    
+    writer.StartObject();
+    writer.Key("type");
+    writer.String("execution_history");
+    writer.Key("executions");
+    writer.StartArray();
+    
+    for (const auto& exec : dto.executions) {
+        writer.StartObject();
+        writer.Key("executionId");
+        writer.String(exec.executionId.c_str());
+        writer.Key("recipeId");
+        writer.String(exec.recipeId.c_str());
+        writer.Key("recipeName");
+        writer.String(exec.recipeName.c_str());
+        writer.Key("startTime");
+        writer.Uint64(exec.startTime);
+        writer.Key("endTime");
+        writer.Uint64(exec.endTime);
+        writer.Key("duration");
+        writer.Uint64(exec.duration);
+        writer.Key("status");
+        writer.String(exec.status.c_str());
+        writer.Key("errorMessage");
+        writer.String(exec.errorMessage.c_str());
+        writer.EndObject();
+    }
+    
+    writer.EndArray();
+    writer.EndObject();
+    
+    if (sb.GetSize() >= bufferSize) {
+        outLength = 0;
+        return false;
+    }
+    
+    std::memcpy(buffer, sb.GetString(), sb.GetSize());
+    buffer[sb.GetSize()] = '\0';
+    outLength = sb.GetSize();
+    return true;
+}
+
+std::string JsonSerialization::serialize(const ExecutionHistoryDto& dto) {
+    char buffer[8192];
+    size_t outLength;
+    if (serializeToBuffer(dto, buffer, sizeof(buffer), outLength)) {
+        return std::string(buffer, outLength);
+    }
+    return "";
+}
+
+bool JsonSerialization::serializeToBuffer(const TimeSeriesDataDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+    
+    writer.StartObject();
+    writer.Key("type");
+    writer.String("timeseries_data");
+    writer.Key("executionId");
+    writer.String(dto.executionId.c_str());
+    writer.Key("series");
+    writer.StartArray();
+    
+    for (const auto& sensor : dto.series) {
+        writer.StartObject();
+        writer.Key("sensorName");
+        writer.String(sensor.sensorName.c_str());
+        writer.Key("unit");
+        writer.String(sensor.unit.c_str());
+        writer.Key("dataPoints");
+        writer.StartArray();
+        for (const auto& point : sensor.dataPoints) {
+            writer.StartObject();
+            writer.Key("timestamp");
+            writer.Uint64(point.timestamp);
+            writer.Key("value");
+            writer.Double(point.value);
+            writer.EndObject();
+        }
+        writer.EndArray();
+        writer.EndObject();
+    }
+    
+    writer.EndArray();
+    writer.EndObject();
+    
+    if (sb.GetSize() >= bufferSize) {
+        outLength = 0;
+        return false;
+    }
+    
+    std::memcpy(buffer, sb.GetString(), sb.GetSize());
+    buffer[sb.GetSize()] = '\0';
+    outLength = sb.GetSize();
+    return true;
+}
+
+std::string JsonSerialization::serialize(const TimeSeriesDataDto& dto) {
+    char buffer[32768];
+    size_t outLength;
+    if (serializeToBuffer(dto, buffer, sizeof(buffer), outLength)) {
+        return std::string(buffer, outLength);
+    }
+    return "";
 }

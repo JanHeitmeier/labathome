@@ -11,11 +11,14 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <map>
 
 enum class RecipeEngineState { Idle, Loaded, Running, Paused, Error };
 
-// Callback function type for state change notifications
 using StateChangeCallback = std::function<void()>;
+
+class TimeSeriesRecorder;
+class RecipeHistoryService;
 
 class RecipeEngine {
 public:
@@ -40,39 +43,45 @@ public:
     float getProgress() const;
     std::string getErrorMessage() const { return m_errorMessage; }
     
-    // User acknowledgment status
     bool isAwaitingAcknowledgment() const { return m_waitingForAcknowledgment; }
     std::string getUserInstruction() const { return m_currentUserInstruction; }
     
-    // State change notification callback
+    std::map<std::string, float> getSensorValues() const;
+    
     void setStateChangeCallback(StateChangeCallback callback) { m_stateChangeCallback = callback; }
+    
+    void setTimeSeriesRecorder(TimeSeriesRecorder* recorder) { m_recorder = recorder; }
+    void setHistoryService(RecipeHistoryService* service) { m_historyService = service; }
 
 private:
     void buildStepContext(StepContext& ctx, size_t stepIndex);
     void executeCurrentStep(uint32_t deltaMs);
     void advanceToNextStep();
     void cleanup();
+    std::vector<std::string> getSensorNames() const;
     
     std::atomic<RecipeEngineState> m_state{RecipeEngineState::Idle};
     std::string m_recipeId;
     std::string m_recipeName;
     std::vector<StepInstanceDescriptor> m_stepDescriptors;
     std::vector<std::unique_ptr<IStep>> m_stepInstances;
-    std::vector<std::unique_ptr<StepContext>> m_stepContexts; // Persistent contexts for each step
+    std::vector<std::unique_ptr<StepContext>> m_stepContexts;
     size_t m_currentStepIndex{0};
     uint32_t m_elapsedMs{0};
     std::string m_errorMessage;
     
-    // User acknowledgment tracking
     bool m_waitingForAcknowledgment{false};
     bool m_acknowledgedByUser{false};
     std::string m_currentUserInstruction;
     
-    // State change notification
     StateChangeCallback m_stateChangeCallback;
     void notifyStateChange() {
         if (m_stateChangeCallback) {
             m_stateChangeCallback();
         }
     }
+    
+    TimeSeriesRecorder* m_recorder{nullptr};
+    RecipeHistoryService* m_historyService{nullptr};
+    std::string m_currentExecutionId;
 };

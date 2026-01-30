@@ -18,6 +18,10 @@ void StepTypeRegistry::init() {
     registerStepType<RedLedButtonStep>();
     registerStepType<YellowGreenLedButtonStep>();
     registerStepType<TwoLedTwoButtonStep>();
+    registerStepType<FanControlStep>();
+    registerStepType<InstructionConfirmationStep>();
+    registerStepType<FanCoolingTimed>();
+    registerStepType<SensorMovementTest>();
     
     // Steps werden nur on-demand erzeugt wenn:
     // 1. Metadaten für Web-UI angefordert werden

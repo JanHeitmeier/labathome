@@ -41,6 +41,14 @@ public:
     virtual void onDeactivated(StepContext& context) = 0;
     virtual bool isTransitionConditionMet(StepContext& context) = 0;
 
+    virtual void onPause(StepContext& context) {
+        (void)context;
+    }
+
+    virtual void onResume(StepContext& context) {
+        (void)context;
+    }
+
     virtual void onError(StepContext& context, const char* msg) {
         (void)context; (void)msg;
     }
@@ -68,14 +76,16 @@ public:
         : typeId_(0),  // Wird später von Registry gesetzt
           displayName_(displayName),
           description_(description),
-          version_(version) {}
+          version_(version),
+          wasPaused_(false) {}
     
     StepBase(const StepBase& other)
         : state_(other.state_),
           typeId_(other.typeId_),
           displayName_(other.displayName_),
           description_(other.description_),
-          version_(other.version_)
+          version_(other.version_),
+          wasPaused_(false)
     {
         // WICHTIG: Pointer-Listen und Maps werden NICHT kopiert!
         // Die abgeleitete Klasse muss ihre eigenen ParamDefs/IoAliasDefs
@@ -90,6 +100,27 @@ public:
 
     State state() const noexcept override { return state_; }
     void setState(State s) noexcept override { state_ = s; }
+
+    bool wasPaused() const noexcept { return wasPaused_; }
+
+    void onPause(StepContext& context) override {
+        wasPaused_ = true;
+        onPauseImpl(context);
+    }
+
+    void onResume(StepContext& context) override {
+        onResumeImpl(context);
+        wasPaused_ = false;
+    }
+
+    // Override these in derived classes instead of onPause/onResume
+    virtual void onPauseImpl(StepContext& context) {
+        (void)context;
+    }
+
+    virtual void onResumeImpl(StepContext& context) {
+        (void)context;
+    }
 
     /**
      * @brief Setzt die TypeId - INTERNAL USE ONLY
@@ -304,4 +335,5 @@ private:
     std::string displayName_{};
     std::string description_{};
     std::string version_{};
+    bool wasPaused_{false};
 };

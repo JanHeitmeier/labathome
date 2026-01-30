@@ -12,6 +12,7 @@ idf_component_register(
         # Recipe Management - Maschinenspezifische Initialisierung
         "example_implementations/recipemanagement/init/InitSteps.cc"
         "example_implementations/recipemanagement/init/InitIos.cc"
+        "example_implementations/recipemanagement/storage/RecipeStorage_impl.cc"
         
         # Webmanager Plugins
         "example_implementations/webmanager_plugins/RecipeManagementPlugin.cc"

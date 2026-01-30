@@ -7,13 +7,17 @@
 #include <ctime>
 #include <cinttypes>
 
+static const char* TAG = "RecipeAppService";
+
 RecipeApplicationService::RecipeApplicationService(
     IRecipeStorage *storage,
     RecipeEngine *engine,
-    IMessageGateway *gateway) : m_storage(storage),
+    IMessageGateway *gateway,
+    RecipeHistoryService* historyService) : m_storage(storage),
                                 m_storageManager(new RecipeStorageManager(storage)),
                                 m_engine(engine),
-                                m_gateway(gateway)
+                                m_gateway(gateway),
+                                m_historyService(historyService)
 {
     if (m_engine)
     {
@@ -67,6 +71,7 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
     }
     else if (cmd == "acknowledge_step")
     {
+        ESP_LOGI(TAG, "Command received: acknowledge_step");
         handleAcknowledgeStep();
     }
     else if (cmd == "get_recipe_list")
@@ -89,9 +94,21 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
     {
         handleGetRecipe(dto.recipeId);
     }
-    else if (cmd == "get_metrics")
+    else if (cmd == "request_live_view")
     {
-        handleGetMetrics();
+        handleRequestLiveView();
+    }
+    else if (cmd == "get_execution_history")
+    {
+        handleGetExecutionHistory();
+    }
+    else if (cmd == "get_timeseries")
+    {
+        handleGetTimeSeries(dto.recipeId);
+    }
+    else if (cmd == "delete_execution")
+    {
+        handleDeleteExecution(dto.recipeId);
     }
 }
 void RecipeApplicationService::handleStartRecipeFromJson(const std::string &jsonRecipe)
@@ -166,9 +183,14 @@ void RecipeApplicationService::handleResumeRecipe()
 }
 void RecipeApplicationService::handleAcknowledgeStep()
 {
+    ESP_LOGI(TAG, "handleAcknowledgeStep called");
     if (!m_engine)
+    {
+        ESP_LOGW(TAG, "No engine available for acknowledgment");
         return;
+    }
     m_engine->acknowledgeStep();
+    ESP_LOGI(TAG, "Engine acknowledgeStep() executed");
 }
 void RecipeApplicationService::handleGetRecipeList()
 {
@@ -249,13 +271,7 @@ void RecipeApplicationService::handleGetRecipe(const std::string &recipeId)
     }
     m_gateway->send(dto);
 }
-void RecipeApplicationService::handleGetMetrics()
-{
-    if (!m_gateway)
-        return;
-    MetricsDto dto = buildMetricsDto();
-    m_gateway->send(dto);
-}
+
 void RecipeApplicationService::sendLiveViewUpdate()
 {
     if (!m_gateway)
@@ -316,9 +332,10 @@ LiveViewDto RecipeApplicationService::buildLiveViewDto() const
     dto.progress = m_engine->getProgress();
     dto.timestamp = static_cast<uint64_t>(std::time(nullptr)) * 1000;
     dto.errorMessage = m_engine->getErrorMessage();
-    // TODO: Sensor-Werte sammeln
-    // dto.sensorValues["temperature"] = getSensorValue("temperature");
-    // dto.sensorValues["humidity"] = getSensorValue("humidity");
+    
+    // Collect sensor values from current step
+    dto.sensorValues = m_engine->getSensorValues();
+    
     return dto;
 }
 AvailableRecipesDto RecipeApplicationService::buildAvailableRecipesDto() const
@@ -448,26 +465,49 @@ AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const
     }
     return dto;
 }
-MetricsDto RecipeApplicationService::buildMetricsDto() const
-{
-    MetricsDto dto;
-    if (!m_engine)
-        return dto;
-    // TODO: Von Engine oder Metrics-Service abfragen
-    // dto.recipeId = m_engine->getCurrentRecipeId();
-    // auto metrics = m_metricsService->getMetrics(dto.recipeId);
-    // dto.series = metrics;
-    dto.recipeId = "recipe_123";
-    MetricSeriesDto tempSeries;
-    tempSeries.name = "Temperature";
-    tempSeries.unit = "°C";
-    for (int i = 0; i < 10; ++i)
-    {
-        MetricDataPointDto point;
-        point.timestamp = static_cast<uint64_t>(std::time(nullptr) - (10 - i) * 60) * 1000;
-        point.value = 20.0f + i * 0.5f;
-        tempSeries.data.push_back(point);
+
+void RecipeApplicationService::handleGetExecutionHistory() {
+    if (!m_historyService || !m_gateway) return;
+    
+    ExecutionHistoryDto dto = m_historyService->getExecutionHistory();
+    m_gateway->send(dto);
+}
+
+void RecipeApplicationService::handleGetTimeSeries(const std::string& executionId) {
+    if (!m_historyService || !m_gateway) return;
+    
+    TimeSeriesDataDto dto;
+    dto.executionId = executionId;
+    
+    std::vector<SensorTimeSeries> series = m_historyService->getTimeSeriesStorage()->loadTimeSeries(executionId);
+    if (series.empty()) {
+        ESP_LOGW(TAG, "TimeSeries for execution %s not found", executionId.c_str());
+        m_gateway->send(dto);
+        return;
     }
-    dto.series.push_back(tempSeries);
-    return dto;
+    
+    for (const auto& ts : series) {
+        SensorTimeSeriesDto sensorDto;
+        sensorDto.sensorName = ts.sensorName;
+        sensorDto.unit = ts.unit;
+        for (const auto& pt : ts.dataPoints) {
+            TimeSeriesPointDto ptDto;
+            ptDto.timestamp = pt.timestamp;
+            ptDto.value = pt.value;
+            sensorDto.dataPoints.push_back(ptDto);
+        }
+        dto.series.push_back(sensorDto);
+    }
+    m_gateway->send(dto);
+}
+
+void RecipeApplicationService::handleDeleteExecution(const std::string& executionId) {
+    if (!m_historyService) return;
+    
+    m_historyService->deleteExecution(executionId);
+    handleGetExecutionHistory();
+}
+
+void RecipeApplicationService::handleRequestLiveView() {
+    sendLiveViewUpdate();
 }

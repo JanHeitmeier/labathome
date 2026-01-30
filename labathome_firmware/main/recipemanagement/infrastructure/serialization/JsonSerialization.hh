@@ -6,20 +6,11 @@
 #include "../../application/dtos/CommandDto.hh"
 #include "../../application/dtos/LiveViewDto.hh"
 #include "../../application/dtos/AvailableStepsDto.hh"
-#include "../../application/dtos/AvailableRecipesDto.hh"  // Enthält RecipeListDto als Alias
+#include "../../application/dtos/AvailableRecipesDto.hh"
 #include "../../application/dtos/RecipeDto.hh"
-#include "../../application/dtos/MetricsDto.hh"
+#include "../../application/dtos/ExecutionHistoryDto.hh"
+#include "../../application/dtos/TimeSeriesDataDto.hh"
 
-/**
- * @brief Zentrale Klasse für JSON-Serialisierung und -Deserialisierung von DTOs
- * 
- * Diese Klasse bietet statische Methoden zur Konvertierung zwischen DTOs und JSON-Strings.
- * Sie verwendet RapidJSON intern und hält die DTOs selbst frei von JSON-Abhängigkeiten.
- * 
- * Optimiert für Embedded-Systeme:
- * - Deserialisierung nutzt std::string_view (keine Kopien)
- * - Serialisierung bietet Buffer-Varianten (caller-allocated memory)
- */
 class JsonSerialization {
 public:
     // ========== Serialisierung (DTO → JSON) ==========
@@ -54,24 +45,6 @@ public:
      */
     static bool serializeToBuffer(const RecipeListDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
     
-    /**
-     * @brief Serialisiert ein MetricsDto in einen bereitgestellten Buffer
-     * @param dto Das zu serialisierende MetricsDto
-     * @param buffer Zeiger auf den Zielpuffer (caller-allocated)
-     * @param bufferSize Größe des Puffers in Bytes
-     * @param outLength Ausgabe: Tatsächliche Länge des JSON-Strings (ohne null-terminator)
-     * @return true bei Erfolg, false wenn Buffer zu klein oder anderer Fehler
-     */
-    static bool serializeToBuffer(const MetricsDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
-    
-    /**
-     * @brief Serialisiert ein RecipeDto in einen bereitgestellten Buffer
-     * @param dto Das zu serialisierende RecipeDto
-     * @param buffer Zeiger auf den Zielpuffer (caller-allocated)
-     * @param bufferSize Größe des Puffers in Bytes
-     * @param outLength Ausgabe: Tatsächliche Länge des JSON-Strings (ohne null-terminator)
-     * @return true bei Erfolg, false wenn Buffer zu klein oder anderer Fehler
-     */
     static bool serializeToBuffer(const RecipeDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
     
     // Convenience-Varianten mit std::string (für weniger kritische Pfade)
@@ -99,18 +72,17 @@ public:
     static std::string serialize(const RecipeListDto& dto);
     
     /**
-     * @brief Serialisiert ein MetricsDto in einen std::string (mit Heap-Allokation)
-     * @param dto Das zu serialisierende MetricsDto
-     * @return JSON-String oder leerer String bei Fehler
-     */
-    static std::string serialize(const MetricsDto& dto);
-    
-    /**
      * @brief Serialisiert ein RecipeDto in einen std::string (mit Heap-Allokation)
      * @param dto Das zu serialisierende RecipeDto
      * @return JSON-String oder leerer String bei Fehler
      */
     static std::string serialize(const RecipeDto& dto);
+    
+    static bool serializeToBuffer(const ExecutionHistoryDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
+    static std::string serialize(const ExecutionHistoryDto& dto);
+    
+    static bool serializeToBuffer(const TimeSeriesDataDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
+    static std::string serialize(const TimeSeriesDataDto& dto);
     
     // ========== Deserialisierung (JSON → DTO) ==========
     

@@ -141,7 +141,12 @@ void RecipeManagementPlugin::send(const RecipeDto& dto) {
     sendJsonWrapped(json);
 }
 
-void RecipeManagementPlugin::send(const MetricsDto& dto) {
+void RecipeManagementPlugin::send(const ExecutionHistoryDto& dto) {
+    std::string json = JsonSerialization::serialize(dto);
+    sendJsonWrapped(json);
+}
+
+void RecipeManagementPlugin::send(const TimeSeriesDataDto& dto) {
     std::string json = JsonSerialization::serialize(dto);
     sendJsonWrapped(json);
 }

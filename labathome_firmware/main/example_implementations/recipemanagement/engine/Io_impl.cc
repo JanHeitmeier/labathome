@@ -49,6 +49,28 @@ private:
 };
 
 
+class MovementInput : public IInput {
+public:
+    explicit MovementInput(iHAL* hal) noexcept
+        : hal_(hal) {}
+
+    ~MovementInput() override = default;
+
+    const char* name() const noexcept override {
+        return "Movement";
+    }
+
+    ParameterValue read() const override {
+        bool state = false;
+        if (hal_) state = hal_->IsMovementDetected();
+        return ParameterValue::fromBoolean(state);
+    }
+
+private:
+    iHAL* hal_;
+};
+
+
 class FanOutput : public IOutput {
 public:
     explicit FanOutput(iHAL* hal, uint8_t fanIndex, const char* name = "Fan") noexcept

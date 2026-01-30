@@ -5,6 +5,7 @@ idf_component_register(
     SRCS 
         # === Core Domain ===
         "core/domain/entities/Recipe.cc"
+        "core/domain/entities/RecipeExecution.cc"
         "core/domain/value-objects/StepContext.cc"
         
         # === Core Services ===
@@ -17,13 +18,18 @@ idf_component_register(
         # === Infrastructure - Serialization ===
         "infrastructure/serialization/JsonSerialization.cc"
         "infrastructure/serialization/RecipeSerializer.cc"
+        "infrastructure/serialization/TimeSeriesSerializer.cc"
         
         # === Infrastructure - Parsers ===
         "infrastructure/parsers/RecipeParser.cc"
         
+        # === Infrastructure - Storage ===
+        
         # === Application Layer ===
         "application/services/RecipeStorageManager.cc"
         "application/services/RecipeApplicationService.cc"
+        "application/services/RecipeHistoryService.cc"
+        "application/services/TimeSeriesRecorder.cc"
         
         # === Application - Use Cases (optional, momentan nicht verwendet) ===
         # "application/usecases/CreateRecipeUseCase.cc"

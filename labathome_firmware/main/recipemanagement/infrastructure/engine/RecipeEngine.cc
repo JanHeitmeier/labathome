@@ -1,4 +1,6 @@
 #include "RecipeEngine.hh"
+#include "../../application/services/TimeSeriesRecorder.hh"
+#include "../../application/services/RecipeHistoryService.hh"
 #include <esp_log.h>
 #include <inttypes.h>
 
@@ -98,6 +100,11 @@ bool RecipeEngine::start() {
         return false;
     }
     
+    if (m_state == RecipeEngineState::Loaded && m_historyService && m_recorder) {
+        m_currentExecutionId = m_historyService->startExecution(m_recipeId, m_recipeName);
+        m_recorder->startRecording(m_currentExecutionId, getSensorNames());
+    }
+    
     if (m_state == RecipeEngineState::Loaded && !m_stepInstances.empty()) {
         IStep* firstStep = m_stepInstances[m_currentStepIndex].get();
         StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
@@ -118,6 +125,16 @@ bool RecipeEngine::pause() {
         return false;
     }
     
+    // Notify current step about pause
+    if (m_currentStepIndex < m_stepInstances.size() && m_currentStepIndex < m_stepContexts.size()) {
+        IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
+        StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
+        if (currentStep && ctx) {
+            currentStep->onPause(*ctx);
+            ESP_LOGI(TAG, "Step paused");
+        }
+    }
+    
     m_state = RecipeEngineState::Paused;
     ESP_LOGI(TAG, "Recipe paused");
     notifyStateChange();
@@ -128,6 +145,16 @@ bool RecipeEngine::resume() {
     if (m_state != RecipeEngineState::Paused) {
         ESP_LOGW(TAG, "Cannot resume: engine not paused");
         return false;
+    }
+    
+    // Notify current step about resume
+    if (m_currentStepIndex < m_stepInstances.size() && m_currentStepIndex < m_stepContexts.size()) {
+        IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
+        StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
+        if (currentStep && ctx) {
+            currentStep->onResume(*ctx);
+            ESP_LOGI(TAG, "Step resumed");
+        }
     }
     
     m_state = RecipeEngineState::Running;
@@ -147,6 +174,16 @@ bool RecipeEngine::stop() {
         StepContext ctx(metadata, IoResourceManager::instance());
         currentStep->onDeactivating(ctx);
         currentStep->onDeactivated(ctx);
+    }
+    
+    if (m_recorder) {
+        m_recorder->stopRecording();
+    }
+    if (m_historyService && !m_currentExecutionId.empty()) {
+        ExecutionStatus status = (m_state == RecipeEngineState::Error) 
+            ? ExecutionStatus::Failed : ExecutionStatus::Aborted;
+        m_historyService->endExecution(m_currentExecutionId, status, m_errorMessage);
+        m_currentExecutionId.clear();
     }
     
     m_stepInstances.clear();
@@ -172,6 +209,15 @@ void RecipeEngine::tick(uint32_t deltaMs) {
         return;
     }
     
+    m_elapsedMs += deltaMs;
+    
+    if (m_recorder && m_recorder->isRecording()) {
+        auto sensorData = getSensorValues();
+        if (!sensorData.empty()) {
+            m_recorder->recordDataPoint(sensorData, m_elapsedMs);
+        }
+    }
+    
     executeCurrentStep(deltaMs);
 }
 
@@ -189,14 +235,22 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
     StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
     StepMetadata metadata = currentStep->getMetadata();
     
+    // Flag für frische Quittierung
+    bool justAcknowledged = false;
+    
     // Wenn User quittiert hat, Context informieren damit isAcknowledged() true zurückgibt
     if (m_acknowledgedByUser) {
         ctx->setAcknowledgedState(true);
+        justAcknowledged = true;
+        // Nach erfolgreicher Quittierung: Engine-Flags zurücksetzen
+        m_waitingForAcknowledgment = false;
+        m_acknowledgedByUser = false;
+        ESP_LOGI(TAG, "Acknowledgment processed, flags reset");
     }
     
     currentStep->onActive(*ctx);
     
-    // Prüfen ob Step Quittierung angefordert hat
+    // Prüfen ob Step (erneut) Quittierung angefordert hat
     if (ctx->isAwaitingAcknowledgment() && !m_waitingForAcknowledgment) {
         m_waitingForAcknowledgment = true;
         m_currentUserInstruction = ctx->getUserInstruction();
@@ -206,7 +260,8 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
     }
     
     // Wenn auf Quittierung gewartet wird, nicht weitermachen
-    if (m_waitingForAcknowledgment && !m_acknowledgedByUser) {
+    // AUSNAHME: Wenn gerade frisch quittiert wurde, dann weitermachen zur Transition-Prüfung
+    if (m_waitingForAcknowledgment && !justAcknowledged) {
         return;
     }
     
@@ -214,8 +269,6 @@ void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
         ESP_LOGI(TAG, "<< Step %zu/%zu completed: typeId=%lu", m_currentStepIndex + 1, m_stepInstances.size(), (unsigned long)metadata.typeId);
         currentStep->onDeactivating(*ctx);
         currentStep->onDeactivated(*ctx);
-        // Acknowledged-Flag zurücksetzen für nächsten Step
-        m_acknowledgedByUser = false;
         advanceToNextStep();
     }
 }
@@ -226,6 +279,15 @@ void RecipeEngine::advanceToNextStep() {
     
     if (m_currentStepIndex >= m_stepInstances.size()) {
         ESP_LOGI(TAG, "Recipe completed - all steps finished");
+        
+        if (m_recorder) {
+            m_recorder->stopRecording();
+        }
+        if (m_historyService && !m_currentExecutionId.empty()) {
+            m_historyService->endExecution(m_currentExecutionId, ExecutionStatus::Completed);
+            m_currentExecutionId.clear();
+        }
+        
         stop();
     } else {
         IStep* nextStep = m_stepInstances[m_currentStepIndex].get();
@@ -274,4 +336,96 @@ void RecipeEngine::acknowledgeStep() {
     
     // Im nächsten tick() wird ctx.setAcknowledgedState(true) gesetzt
     // und der Step kann dann isAcknowledged() prüfen
+}
+
+std::map<std::string, float> RecipeEngine::getSensorValues() const {
+    std::map<std::string, float> sensorValues;
+    
+    // Only collect if we have a running step
+    if (m_state != RecipeEngineState::Running && m_state != RecipeEngineState::Paused) {
+        ESP_LOGD(TAG, "getSensorValues: Not running or paused, state=%d", static_cast<int>(m_state.load()));
+        return sensorValues;
+    }
+    
+    if (m_currentStepIndex >= m_stepInstances.size() || m_currentStepIndex >= m_stepContexts.size()) {
+        ESP_LOGD(TAG, "getSensorValues: Invalid step index");
+        return sensorValues;
+    }
+    
+    IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
+    StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
+    
+    if (!currentStep || !ctx) {
+        ESP_LOGD(TAG, "getSensorValues: Null step or context");
+        return sensorValues;
+    }
+    
+    // Get all input aliases from the step
+    auto aliasPointers = currentStep->getIoAliasPointers();
+    ESP_LOGI(TAG, "getSensorValues: Checking %zu aliases", aliasPointers.size());
+    
+    for (const IoAliasDef* aliasPtr : aliasPointers) {
+        if (!aliasPtr) continue;
+        
+        ESP_LOGI(TAG, "  Alias: %s, isInput=%d, physicalName=%s", 
+                 aliasPtr->aliasName.c_str(), aliasPtr->isInput, aliasPtr->physicalName.c_str());
+        
+        if (!aliasPtr->isInput) continue;
+        
+        // Try to read the input value
+        auto input = ctx->getInput(aliasPtr->aliasName);
+        if (!input) {
+            ESP_LOGW(TAG, "  Input not found for alias: %s", aliasPtr->aliasName.c_str());
+            continue;
+        }
+        
+        ParameterValue val = input->read();
+        ESP_LOGI(TAG, "  Read value type: %s", val.getTypeName());
+        
+        // Convert value to float based on type
+        if (val.isType(ParameterType::BOOLEAN)) {
+            float floatVal = val.getBoolean() ? 1.0f : 0.0f;
+            sensorValues[aliasPtr->aliasName] = floatVal;
+            ESP_LOGI(TAG, "  Added BOOLEAN sensor '%s' = %.1f", aliasPtr->aliasName.c_str(), floatVal);
+        } else if (val.isType(ParameterType::GENERIC_INT)) {
+            sensorValues[aliasPtr->aliasName] = static_cast<float>(val.getGenericInt());
+            ESP_LOGI(TAG, "  Added INT sensor '%s'", aliasPtr->aliasName.c_str());
+        } else if (val.isType(ParameterType::TIME_MILLISECONDS)) {
+            sensorValues[aliasPtr->aliasName] = static_cast<float>(val.getTimeMilliseconds());
+            ESP_LOGI(TAG, "  Added TIME_MS sensor '%s'", aliasPtr->aliasName.c_str());
+        } else if (val.isType(ParameterType::PERCENTAGE)) {
+            sensorValues[aliasPtr->aliasName] = val.getPercentage();
+            ESP_LOGI(TAG, "  Added PERCENTAGE sensor '%s'", aliasPtr->aliasName.c_str());
+        } else if (val.isType(ParameterType::TEMPERATURE)) {
+            sensorValues[aliasPtr->aliasName] = val.getTemperature(TemperatureUnit::CELSIUS);
+            ESP_LOGI(TAG, "  Added TEMPERATURE sensor '%s'", aliasPtr->aliasName.c_str());
+        } else {
+            ESP_LOGW(TAG, "  Unsupported sensor type for '%s'", aliasPtr->aliasName.c_str());
+        }
+    }
+    
+    ESP_LOGI(TAG, "getSensorValues: Returning %zu sensor values", sensorValues.size());
+    return sensorValues;
+}
+
+std::vector<std::string> RecipeEngine::getSensorNames() const {
+    std::vector<std::string> names;
+    
+    if (m_currentStepIndex >= m_stepContexts.size()) {
+        return names;
+    }
+    
+    const StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
+    if (!ctx) {
+        return names;
+    }
+    
+    const auto& aliasPointers = ctx->getMetadata().ioAliases;
+    for (const auto& aliasPtr : aliasPointers) {
+        if (aliasPtr.isInput && aliasPtr.isSensor) {
+            names.push_back(aliasPtr.aliasName);
+        }
+    }
+    
+    return names;
 }

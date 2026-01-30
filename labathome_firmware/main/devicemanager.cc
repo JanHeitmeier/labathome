@@ -9,12 +9,15 @@
 #include "../generated/flatbuffers_cpp/ns03functionblock_generated.h"
 #include "../generated/flatbuffers_cpp/ns04heaterexperiment_generated.h"
 #include "esp_vfs.h"
+#include "esp_timer.h"
 #include "modbus.hh"
 
 #include "recipemanagement/core/services/IoResourceManager.hh"
 #include "recipemanagement/infrastructure/engine/StepTypeRegistry.hh"
 #include "recipemanagement/infrastructure/engine/RecipeEngine.hh"
 #include "recipemanagement/application/services/RecipeApplicationService.hh"
+#include "recipemanagement/application/services/RecipeHistoryService.hh"
+#include "recipemanagement/application/services/TimeSeriesRecorder.hh"
 #include "recipemanagement/infrastructure/serialization/JsonSerialization.hh"
 #include "recipemanagement/application/dtos/CommandDto.hh"
 #include "example_implementations/recipemanagement/storage/RecipeStorage_impl.cc"
@@ -36,14 +39,23 @@ DeviceManager::DeviceManager(iHAL *hal):hal(hal)
     nextExecutable = nullptr;
     heaterPIDController = new PID::Controller<float>(&actualTemperature, &setpointHeater, &setpointTemperature, 0, 100, PID::Mode::OFF, PID::AntiWindup::ON_LIMIT_INTEGRATOR, PID::Direction::DIRECT, 1000);
     
-    //KIS PRinzip verfolge !!! für abstracte konzept gute begründungen liefern wichtig!
-    //Recipemanagement Sektion
     ESP_LOGI(TAG, "Initializing Recipe Management Framework");
     IoResourceManager::instance().init(hal);
     StepTypeRegistry::instance().init();
-    m_recipeStorage = new RecipeStorageImpl();
+    
+    RecipeStorageImpl* storage = new RecipeStorageImpl();
+    m_recipeStorage = storage;
+    m_executionStorage = storage;
+    m_timeSeriesStorage = storage;
+    
     m_recipeEngine = new RecipeEngine();
-    m_recipeService = new RecipeApplicationService(m_recipeStorage, m_recipeEngine, nullptr);
+    m_historyService = new RecipeHistoryService(m_executionStorage, m_timeSeriesStorage, []() { return esp_timer_get_time() / 1000; });
+    m_timeSeriesRecorder = new TimeSeriesRecorder(m_timeSeriesStorage);
+    
+    m_recipeEngine->setTimeSeriesRecorder(m_timeSeriesRecorder);
+    m_recipeEngine->setHistoryService(m_historyService);
+    
+    m_recipeService = new RecipeApplicationService(m_recipeStorage, m_recipeEngine, nullptr, m_historyService);
     ESP_LOGI(TAG, "Recipe Management Framework initialized");
 }
 

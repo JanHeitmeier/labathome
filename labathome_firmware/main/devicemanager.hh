@@ -18,6 +18,10 @@ class RecipeApplicationService;
 class IMessageGateway;
 class IRecipeStorage;
 class RecipeEngine;
+class RecipeHistoryService;
+class TimeSeriesRecorder;
+class IRecipeExecutionStorage;
+class ITimeSeriesStorage;
 
 //see Flowchart.ts -values must be the same
 constexpr const char *FBDSTORE_BASE_DIRECTORY = "/spiffs/fbdstore/";    
@@ -150,10 +154,14 @@ class DeviceManager:public FBContext
         float setpointServo1=0;
         float setpointHeater=0;
         float setpointVoltageOut=0;
-        //Rezeptmanagement Sektion
+        
         IRecipeStorage* m_recipeStorage;
         RecipeEngine* m_recipeEngine;
         RecipeApplicationService* m_recipeService;
+        RecipeHistoryService* m_historyService;
+        TimeSeriesRecorder* m_timeSeriesRecorder;
+        IRecipeExecutionStorage* m_executionStorage;
+        ITimeSeriesStorage* m_timeSeriesStorage;
         bool m_testCommandSent = false;
 
         void EternalLoop();

@@ -1,12 +1,19 @@
 // RecipeStorageImpl.cpp
-// Implementation of IRecipeStorage using LittleFS (SPIFFS mount) on ESP32-S3
-// Stores recipes as JSON files in /spiffs/recipes_json/
-// Uses RapidJSON (via JsonSerialization) and RecipeDto for serialization
+// Implementation of IRecipeStorage, IRecipeExecutionStorage, ITimeSeriesStorage
+// Uses SPIFFS for all storage (hardware-agnostic interface)
+// - Recipes: /spiffs/recipes_json/ and /spiffs/recipes_bin/
+// - Executions: /spiffs/executions/
+// - TimeSeries: /spiffs/timeseries/
 
 #include "../../../recipemanagement/core/interfaces/storage/IRecipeStorage.hh"
+#include "../../../recipemanagement/core/interfaces/storage/IRecipeExecutionStorage.hh"
+#include "../../../recipemanagement/core/interfaces/storage/ITimeSeriesStorage.hh"
 #include "../../../recipemanagement/core/domain/entities/Recipe.hh"
+#include "../../../recipemanagement/core/domain/entities/RecipeExecution.hh"
+#include "../../../recipemanagement/core/domain/value-objects/SensorTimeSeries.hh"
 #include "../../../recipemanagement/application/dtos/RecipeDto.hh"
 #include "../../../recipemanagement/infrastructure/serialization/JsonSerialization.hh"
+#include "../../../recipemanagement/infrastructure/serialization/TimeSeriesSerializer.hh"
 #include <string>
 #include <vector>
 #include <optional>
@@ -23,8 +30,12 @@
 static const char* TAG_RECIPE_STORAGE = "RecipeStorage";
 static const char* JSON_DIR = "/spiffs/recipes_json";
 static const char* BIN_DIR = "/spiffs/recipes_bin";
+static const char* EXEC_DIR = "/spiffs/executions";
+static const char* TIMESERIES_DIR = "/spiffs/timeseries";
 
-class RecipeStorageImpl : public IRecipeStorage {
+class RecipeStorageImpl : public IRecipeStorage, 
+                          public IRecipeExecutionStorage,
+                          public ITimeSeriesStorage {
 public:
     RecipeStorageImpl() {
         ensureDirsExist();
@@ -196,20 +207,21 @@ private:
     
     void ensureDirsExist() {
         struct stat st;
-        if (stat(JSON_DIR, &st) != 0) {
-            if (mkdir(JSON_DIR, 0755) != 0 && errno != EEXIST) {
-                ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to create directory '%s': %s", JSON_DIR, strerror(errno));
-            } else {
-                ESP_LOGI(TAG_RECIPE_STORAGE, "Created directory '%s'", JSON_DIR);
+        auto ensureDir = [](const char* dir) {
+            struct stat st;
+            if (stat(dir, &st) != 0) {
+                if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+                    ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to create directory '%s': %s", dir, strerror(errno));
+                } else {
+                    ESP_LOGI(TAG_RECIPE_STORAGE, "Created directory '%s'", dir);
+                }
             }
-        }
-        if (stat(BIN_DIR, &st) != 0) {
-            if (mkdir(BIN_DIR, 0755) != 0 && errno != EEXIST) {
-                ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to create directory '%s': %s", BIN_DIR, strerror(errno));
-            } else {
-                ESP_LOGI(TAG_RECIPE_STORAGE, "Created directory '%s'", BIN_DIR);
-            }
-        }
+        };
+        
+        ensureDir(JSON_DIR);
+        ensureDir(BIN_DIR);
+        ensureDir(EXEC_DIR);
+        ensureDir(TIMESERIES_DIR);
     }
 
     bool saveBlobToFile(uint32_t id, const std::vector<uint8_t>& blob, bool isJson) {
@@ -348,5 +360,207 @@ private:
         r.setSteps(steps);
         
         return r;
+    }
+    
+    // ========== IRecipeExecutionStorage Implementation ==========
+    
+    bool save(const RecipeExecution& execution) override {
+        std::string filename = std::string(EXEC_DIR) + "/" + execution.executionId() + ".exec";
+        
+        std::string blob;
+        blob += execution.executionId() + "|";
+        blob += execution.recipeId() + "|";
+        blob += execution.recipeName() + "|";
+        blob += std::to_string(execution.startTimestamp()) + "|";
+        blob += std::to_string(execution.endTimestamp()) + "|";
+        blob += std::to_string(static_cast<int>(execution.status())) + "|";
+        blob += execution.errorMessage();
+        
+        FILE* f = fopen(filename.c_str(), "w");
+        if (!f) {
+            ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to save execution '%s': %s", filename.c_str(), strerror(errno));
+            return false;
+        }
+        
+        fwrite(blob.data(), 1, blob.size(), f);
+        fclose(f);
+        
+        ESP_LOGI(TAG_RECIPE_STORAGE, "Saved execution %s", execution.executionId().c_str());
+        return true;
+    }
+    
+    std::optional<RecipeExecution> load(const std::string& executionId) override {
+        std::string filename = std::string(EXEC_DIR) + "/" + executionId + ".exec";
+        
+        FILE* f = fopen(filename.c_str(), "r");
+        if (!f) {
+            return std::nullopt;
+        }
+        
+        fseek(f, 0, SEEK_END);
+        long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        
+        if (size <= 0) {
+            fclose(f);
+            return std::nullopt;
+        }
+        
+        std::string blob(size, '\0');
+        fread(&blob[0], 1, size, f);
+        fclose(f);
+        
+        size_t pos = 0;
+        auto getToken = [&]() -> std::string {
+            size_t next = blob.find('|', pos);
+            if (next == std::string::npos) next = blob.size();
+            std::string token = blob.substr(pos, next - pos);
+            pos = next + 1;
+            return token;
+        };
+        
+        RecipeExecution exec;
+        exec.setExecutionId(getToken());
+        exec.setRecipeId(getToken());
+        exec.setRecipeName(getToken());
+        exec.setStartTimestamp(std::stoull(getToken()));
+        exec.setEndTimestamp(std::stoull(getToken()));
+        exec.setStatus(static_cast<ExecutionStatus>(std::stoi(getToken())));
+        exec.setErrorMessage(getToken());
+        
+        return exec;
+    }
+    
+    std::vector<RecipeExecution> loadAll() override {
+        std::vector<RecipeExecution> result;
+        
+        DIR* dir = opendir(EXEC_DIR);
+        if (!dir) {
+            ESP_LOGW(TAG_RECIPE_STORAGE, "Failed to open executions dir");
+            return result;
+        }
+        
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            if (entry->d_type == DT_REG) {
+                std::string filename(entry->d_name);
+                if (filename.size() > 5 && filename.substr(filename.size() - 5) == ".exec") {
+                    std::string execId = filename.substr(0, filename.size() - 5);
+                    auto exec = load(execId);
+                    if (exec.has_value()) {
+                        result.push_back(exec.value());
+                    }
+                }
+            }
+        }
+        closedir(dir);
+        
+        ESP_LOGI(TAG_RECIPE_STORAGE, "Loaded %zu executions", result.size());
+        return result;
+    }
+    
+    bool deleteById(const std::string& executionId) override {
+        std::string filename = std::string(EXEC_DIR) + "/" + executionId + ".exec";
+        if (unlink(filename.c_str()) == 0) {
+            ESP_LOGI(TAG_RECIPE_STORAGE, "Deleted execution %s", executionId.c_str());
+            return true;
+        }
+        return errno == ENOENT;
+    }
+    
+    bool exists(const std::string& executionId) override {
+        std::string filename = std::string(EXEC_DIR) + "/" + executionId + ".exec";
+        struct stat st;
+        return stat(filename.c_str(), &st) == 0;
+    }
+    
+    // ========== ITimeSeriesStorage Implementation ==========
+    
+    bool saveTimeSeries(const std::string& executionId, const std::vector<SensorTimeSeries>& series) override {
+        if (series.empty()) {
+            ESP_LOGW(TAG_RECIPE_STORAGE, "No series to save for %s", executionId.c_str());
+            return false;
+        }
+        
+        std::vector<uint8_t> data = TimeSeriesSerializer::serialize(series);
+        if (data.empty()) {
+            ESP_LOGE(TAG_RECIPE_STORAGE, "Serialization failed for %s", executionId.c_str());
+            return false;
+        }
+        
+        std::string path = std::string(TIMESERIES_DIR) + "/" + executionId + ".tsdata";
+        FILE* f = fopen(path.c_str(), "wb");
+        if (!f) {
+            ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to open '%s': %s", path.c_str(), strerror(errno));
+            return false;
+        }
+        
+        size_t written = fwrite(data.data(), 1, data.size(), f);
+        fclose(f);
+        
+        if (written != data.size()) {
+            ESP_LOGE(TAG_RECIPE_STORAGE, "Write failed for '%s': %zu/%zu bytes", path.c_str(), written, data.size());
+            return false;
+        }
+        
+        ESP_LOGI(TAG_RECIPE_STORAGE, "Saved %zu series (%zu bytes) to '%s'", series.size(), data.size(), path.c_str());
+        return true;
+    }
+    
+    std::vector<SensorTimeSeries> loadTimeSeries(const std::string& executionId) override {
+        std::vector<SensorTimeSeries> result;
+        
+        std::string path = std::string(TIMESERIES_DIR) + "/" + executionId + ".tsdata";
+        FILE* f = fopen(path.c_str(), "rb");
+        if (!f) {
+            if (errno != ENOENT) {
+                ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to open '%s': %s", path.c_str(), strerror(errno));
+            }
+            return result;
+        }
+        
+        fseek(f, 0, SEEK_END);
+        long fileSize = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        
+        if (fileSize <= 0) {
+            fclose(f);
+            ESP_LOGW(TAG_RECIPE_STORAGE, "Invalid file size %ld for '%s'", fileSize, path.c_str());
+            return result;
+        }
+        
+        std::vector<uint8_t> data(fileSize);
+        size_t bytesRead = fread(data.data(), 1, fileSize, f);
+        fclose(f);
+        
+        if (bytesRead != static_cast<size_t>(fileSize)) {
+            ESP_LOGE(TAG_RECIPE_STORAGE, "Read failed for '%s': %zu/%ld bytes", path.c_str(), bytesRead, fileSize);
+            return result;
+        }
+        
+        if (!TimeSeriesSerializer::deserialize(data, result)) {
+            ESP_LOGE(TAG_RECIPE_STORAGE, "Deserialization failed for '%s'", path.c_str());
+            result.clear();
+        }
+        
+        return result;
+    }
+    
+    bool deleteTimeSeries(const std::string& executionId) override {
+        std::string path = std::string(TIMESERIES_DIR) + "/" + executionId + ".tsdata";
+        if (unlink(path.c_str()) == 0) {
+            ESP_LOGI(TAG_RECIPE_STORAGE, "Deleted timeseries '%s'", path.c_str());
+            return true;
+        }
+        return errno == ENOENT;
+    }
+    
+    size_t getStorageSize(const std::string& executionId) override {
+        std::string path = std::string(TIMESERIES_DIR) + "/" + executionId + ".tsdata";
+        struct stat st;
+        if (stat(path.c_str(), &st) == 0) {
+            return st.st_size;
+        }
+        return 0;
     }
 };

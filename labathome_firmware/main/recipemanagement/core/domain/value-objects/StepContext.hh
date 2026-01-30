@@ -47,6 +47,9 @@ public:
     
     // Mutex access for thread-safety
     std::mutex& getMutex();
+    
+    // Metadata access (needed by RecipeEngine for sensor name resolution)
+    const StepMetadata& getMetadata() const { return m_metadata; }
 
 private:
     StepMetadata m_metadata; // Copy instead of reference - persists with context
@@ -64,5 +67,10 @@ private:
     
     // Allow Engine to restore acknowledged state
     friend class RecipeEngine;
-    void setAcknowledgedState(bool acked) { m_acknowledged = acked; }
+    void setAcknowledgedState(bool acked) { 
+        m_acknowledged = acked; 
+        // When acknowledging, clear the awaiting flag (user has responded)
+        // When resetting, also clear the awaiting flag (new request needed)
+        m_awaitingAcknowledgment = false;
+    }
 };
