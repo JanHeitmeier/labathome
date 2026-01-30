@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <cstdint>
 
 struct StepConfigDto {
     std::string stepTypeId;
@@ -19,4 +20,6 @@ struct RecipeDto {
     std::vector<StepConfigDto> steps;
     std::string author;
     std::string version;
+    uint64_t createdAt{0};
+    uint64_t lastModified{0};
 };

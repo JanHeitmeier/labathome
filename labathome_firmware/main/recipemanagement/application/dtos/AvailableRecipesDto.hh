@@ -8,6 +8,7 @@ struct RecipeInfoDto {
     std::string id;
     std::string name;
     std::string description;
+    std::string version;
     uint64_t createdAt;
     uint64_t lastModified;
 };

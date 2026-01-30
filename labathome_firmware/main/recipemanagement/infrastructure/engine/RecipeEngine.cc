@@ -257,11 +257,6 @@ float RecipeEngine::getProgress() const {
         return 1.0f;
     }
     
-    // Progress calculation: completed steps + 0.5 for the running step
-    // Example with 2 steps:
-    //   Step 0 running (index 0): (0 + 0.5) / 2 = 25%
-    //   Step 1 running (index 1): (1 + 0.5) / 2 = 75%
-    //   All done (index 2): 100%
     return (static_cast<float>(m_currentStepIndex) + 0.5f) / static_cast<float>(m_stepInstances.size());
 }
 

@@ -179,6 +179,8 @@ bool JsonSerialization::serializeToBuffer(const RecipeListDto& dto, char* buffer
         writer.String(recipe.name.c_str());
         writer.Key("description");
         writer.String(recipe.description.c_str());
+        writer.Key("version");
+        writer.String(recipe.version.c_str());
         writer.Key("createdAt");
         writer.Uint64(recipe.createdAt);
         writer.Key("lastModified");
@@ -221,6 +223,12 @@ bool JsonSerialization::serializeToBuffer(const RecipeDto& dto, char* buffer, si
     
     writer.Key("version");
     writer.String(dto.version.c_str());
+    
+    writer.Key("createdAt");
+    writer.Uint64(dto.createdAt);
+    
+    writer.Key("lastModified");
+    writer.Uint64(dto.lastModified);
     
     writer.Key("steps");
     writer.StartArray();
@@ -497,6 +505,19 @@ bool JsonSerialization::deserialize(std::string_view json, RecipeDto& outDto) {
         outDto.version = doc["version"].GetString();
     } else {
         outDto.version = "1.0";
+    }
+    
+    // Optional: timestamps
+    if (doc.HasMember("createdAt") && doc["createdAt"].IsUint64()) {
+        outDto.createdAt = doc["createdAt"].GetUint64();
+    } else {
+        outDto.createdAt = 0;
+    }
+    
+    if (doc.HasMember("lastModified") && doc["lastModified"].IsUint64()) {
+        outDto.lastModified = doc["lastModified"].GetUint64();
+    } else {
+        outDto.lastModified = 0;
     }
     
     // Steps-Array

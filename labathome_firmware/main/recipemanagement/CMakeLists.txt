@@ -16,6 +16,7 @@ idf_component_register(
         
         # === Infrastructure - Serialization ===
         "infrastructure/serialization/JsonSerialization.cc"
+        "infrastructure/serialization/RecipeSerializer.cc"
         
         # === Infrastructure - Parsers ===
         "infrastructure/parsers/RecipeParser.cc"

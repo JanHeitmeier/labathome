@@ -16,6 +16,13 @@ private:
 public:
     RecipeStorageManager(IRecipeStorage* storage) : m_storage(storage) {}
     
+    // HIGH-LEVEL SMART OPERATIONS
+    // Lädt komplettes Recipe für Ausführung (nutzt Binary-Cache wenn vorhanden, sonst JSON)
+    bool loadRecipeForExecution(uint32_t recipeIdHash, Recipe& outRecipe);
+    
+    // Speichert Recipe mit automatischer Serialisierung (JSON + Binary-Cache)
+    bool saveRecipeWithCache(uint32_t recipeIdHash, const std::string& jsonRecipe, const Recipe& recipe);
+    
     // JSON RECIPES
     bool saveJsonRecipe(const std::string& jsonRecipe);
     bool saveJsonRecipeWithStringId(const std::string& jsonRecipe);
