@@ -365,6 +365,8 @@ private:
     // ========== IRecipeExecutionStorage Implementation ==========
     
     bool save(const RecipeExecution& execution) override {
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[SAVE_EXEC] Saving execution");
+        
         std::string filename = std::string(EXEC_DIR) + "/" + execution.executionId() + ".exec";
         
         std::string blob;
@@ -376,24 +378,30 @@ private:
         blob += std::to_string(static_cast<int>(execution.status())) + "|";
         blob += execution.errorMessage();
         
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[SAVE_EXEC] Serialized blob");
+        
         FILE* f = fopen(filename.c_str(), "w");
         if (!f) {
-            ESP_LOGE(TAG_RECIPE_STORAGE, "Failed to save execution '%s': %s", filename.c_str(), strerror(errno));
+            ESP_LOGE(TAG_RECIPE_STORAGE, "[SAVE_EXEC] Failed to save execution");
             return false;
         }
         
         fwrite(blob.data(), 1, blob.size(), f);
         fclose(f);
         
-        ESP_LOGI(TAG_RECIPE_STORAGE, "Saved execution %s", execution.executionId().c_str());
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[SAVE_EXEC] Successfully saved execution");
         return true;
     }
     
     std::optional<RecipeExecution> load(const std::string& executionId) override {
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_EXEC] Loading execution");
+        
         std::string filename = std::string(EXEC_DIR) + "/" + executionId + ".exec";
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_EXEC] Opening file");
         
         FILE* f = fopen(filename.c_str(), "r");
         if (!f) {
+            ESP_LOGW(TAG_RECIPE_STORAGE, "[LOAD_EXEC] File not found");
             return std::nullopt;
         }
         
@@ -401,14 +409,19 @@ private:
         long size = ftell(f);
         fseek(f, 0, SEEK_SET);
         
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_EXEC] Reading file");
+        
         if (size <= 0) {
             fclose(f);
+            ESP_LOGW(TAG_RECIPE_STORAGE, "[LOAD_EXEC] Invalid file size");
             return std::nullopt;
         }
         
         std::string blob(size, '\0');
         fread(&blob[0], 1, size, f);
         fclose(f);
+        
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_EXEC] Deserializing");
         
         size_t pos = 0;
         auto getToken = [&]() -> std::string {
@@ -428,34 +441,57 @@ private:
         exec.setStatus(static_cast<ExecutionStatus>(std::stoi(getToken())));
         exec.setErrorMessage(getToken());
         
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_EXEC] Successfully loaded");
         return exec;
     }
     
     std::vector<RecipeExecution> loadAll() override {
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] ===== STARTING loadAll() =====");
+        
         std::vector<RecipeExecution> result;
         
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Attempting to open directory: %s", EXEC_DIR);
         DIR* dir = opendir(EXEC_DIR);
         if (!dir) {
-            ESP_LOGW(TAG_RECIPE_STORAGE, "Failed to open executions dir");
+            ESP_LOGE(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] FAILED to open executions directory!");
             return result;
         }
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Directory opened successfully");
         
+        int fileCount = 0;
+        int execCount = 0;
         struct dirent* entry;
         while ((entry = readdir(dir)) != nullptr) {
+            ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Directory entry type=%d", entry->d_type);
+            
             if (entry->d_type == DT_REG) {
+                fileCount++;
                 std::string filename(entry->d_name);
-                if (filename.size() > 5 && filename.substr(filename.size() - 5) == ".exec") {
-                    std::string execId = filename.substr(0, filename.size() - 5);
+                ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Found regular file #%d", fileCount);
+                
+                size_t len = filename.size();
+                ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Filename length: %zu", len);
+                
+                if (len > 5 && filename.substr(len - 5) == ".exec") {
+                    execCount++;
+                    std::string execId = filename.substr(0, len - 5);
+                    ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Found .exec file #%d", execCount);
+                    
                     auto exec = load(execId);
                     if (exec.has_value()) {
                         result.push_back(exec.value());
+                        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] Successfully loaded and added execution #%d", execCount);
+                    } else {
+                        ESP_LOGE(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] FAILED to load execution #%d", execCount);
                     }
+                } else {
+                    ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] File does not end with .exec, skipping");
                 }
             }
         }
         closedir(dir);
         
-        ESP_LOGI(TAG_RECIPE_STORAGE, "Loaded %zu executions", result.size());
+        ESP_LOGI(TAG_RECIPE_STORAGE, "[LOAD_ALL_EXEC] ===== COMPLETED: Found %d files, %d .exec files, returning %d executions =====", fileCount, execCount, (int)result.size());
         return result;
     }
     

@@ -72,10 +72,10 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
                     // Direkte Zuweisung zur Referenz
                     paramDef->value = parsedValue;
                 } else {
-                    ESP_LOGW(TAG, "Failed to parse parameter '%s' = '%s'", key.c_str(), stringValue.c_str());
+                    ESP_LOGW(TAG, "Failed to parse parameter");
                 }
             } else {
-                ESP_LOGW(TAG, "Unknown parameter key: %s", key.c_str());
+                ESP_LOGW(TAG, "Unknown parameter key");
             }
         }
         
@@ -89,7 +89,7 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
     m_currentStepIndex = 0;
     m_elapsedMs = 0;
     m_state = RecipeEngineState::Loaded;
-    ESP_LOGI(TAG, "Recipe loaded: id=%s, steps=%zu", recipeId.c_str(), steps.size());
+    ESP_LOGI(TAG, "Recipe loaded successfully");
     notifyStateChange();
     return true;
 }
@@ -102,14 +102,23 @@ bool RecipeEngine::start() {
     
     if (m_state == RecipeEngineState::Loaded && m_historyService && m_recorder) {
         m_currentExecutionId = m_historyService->startExecution(m_recipeId, m_recipeName);
-        m_recorder->startRecording(m_currentExecutionId, getSensorNames());
+        ESP_LOGI(TAG, "[RECORDER] Execution started");
+        
+        std::vector<std::string> sensorNames = getSensorNames();
+        ESP_LOGI(TAG, "[RECORDER] Got sensor names");
+        for (const auto& name : sensorNames) {
+            ESP_LOGI(TAG, "[RECORDER] Sensor registered");
+        }
+        
+        m_recorder->startRecording(m_currentExecutionId, sensorNames);
+        ESP_LOGI(TAG, "[RECORDER] Recorder started");
     }
     
     if (m_state == RecipeEngineState::Loaded && !m_stepInstances.empty()) {
         IStep* firstStep = m_stepInstances[m_currentStepIndex].get();
         StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
         StepMetadata metadata = firstStep->getMetadata();
-        ESP_LOGI(TAG, ">> Starting Step 1/%zu: typeId=%lu name=%s", m_stepInstances.size(), (unsigned long)metadata.typeId, metadata.displayName.c_str());
+        ESP_LOGI(TAG, ">> Starting first step");
         firstStep->onActivating(*ctx);
     }
     
@@ -214,7 +223,10 @@ void RecipeEngine::tick(uint32_t deltaMs) {
     if (m_recorder && m_recorder->isRecording()) {
         auto sensorData = getSensorValues();
         if (!sensorData.empty()) {
+            ESP_LOGD(TAG, "[TICK] Recording %zu sensor values at %lu ms", sensorData.size(), (unsigned long)m_elapsedMs);
             m_recorder->recordDataPoint(sensorData, m_elapsedMs);
+        } else {
+            ESP_LOGD(TAG, "[TICK] No sensor data to record at %lu ms", (unsigned long)m_elapsedMs);
         }
     }
     
@@ -280,9 +292,8 @@ void RecipeEngine::advanceToNextStep() {
     if (m_currentStepIndex >= m_stepInstances.size()) {
         ESP_LOGI(TAG, "Recipe completed - all steps finished");
         
-        if (m_recorder) {
-            m_recorder->stopRecording();
-        }
+        // Don't call stopRecording() here - stop() will handle it
+        
         if (m_historyService && !m_currentExecutionId.empty()) {
             m_historyService->endExecution(m_currentExecutionId, ExecutionStatus::Completed);
             m_currentExecutionId.clear();
@@ -375,12 +386,12 @@ std::map<std::string, float> RecipeEngine::getSensorValues() const {
         // Try to read the input value
         auto input = ctx->getInput(aliasPtr->aliasName);
         if (!input) {
-            ESP_LOGW(TAG, "  Input not found for alias: %s", aliasPtr->aliasName.c_str());
+            ESP_LOGW(TAG, "  Input not found");
             continue;
         }
         
         ParameterValue val = input->read();
-        ESP_LOGI(TAG, "  Read value type: %s", val.getTypeName());
+        ESP_LOGI(TAG, "  Read value");
         
         // Convert value to float based on type
         if (val.isType(ParameterType::BOOLEAN)) {
@@ -411,21 +422,32 @@ std::map<std::string, float> RecipeEngine::getSensorValues() const {
 std::vector<std::string> RecipeEngine::getSensorNames() const {
     std::vector<std::string> names;
     
-    if (m_currentStepIndex >= m_stepContexts.size()) {
-        return names;
-    }
+    ESP_LOGI(TAG, "[SENSORS] Collecting sensor names from %zu steps", m_stepInstances.size());
     
-    const StepContext* ctx = m_stepContexts[m_currentStepIndex].get();
-    if (!ctx) {
-        return names;
-    }
-    
-    const auto& aliasPointers = ctx->getMetadata().ioAliases;
-    for (const auto& aliasPtr : aliasPointers) {
-        if (aliasPtr.isInput && aliasPtr.isSensor) {
-            names.push_back(aliasPtr.aliasName);
+    // Collect sensor names from ALL steps, not just the current one
+    for (size_t i = 0; i < m_stepInstances.size(); i++) {
+        if (i >= m_stepInstances.size()) continue;
+        
+        IStep* step = m_stepInstances[i].get();
+        if (!step) continue;
+        
+        StepMetadata metadata = step->getMetadata();
+        ESP_LOGI(TAG, "[SENSORS] Step %zu (%s) has %zu IO aliases", i, metadata.displayName.c_str(), metadata.ioAliases.size());
+        
+        for (const auto& ioAlias : metadata.ioAliases) {
+            ESP_LOGD(TAG, "  [SENSORS] Alias '%s': isInput=%d, isSensor=%d", 
+                     ioAlias.aliasName.c_str(), ioAlias.isInput, ioAlias.isSensor);
+            
+            if (ioAlias.isInput && ioAlias.isSensor) {
+                // Avoid duplicates
+                if (std::find(names.begin(), names.end(), ioAlias.aliasName) == names.end()) {
+                    names.push_back(ioAlias.aliasName);
+                    ESP_LOGI(TAG, "  [SENSORS] Added sensor: '%s'", ioAlias.aliasName.c_str());
+                }
+            }
         }
     }
     
+    ESP_LOGI(TAG, "[SENSORS] Total unique sensors: %zu", names.size());
     return names;
 }

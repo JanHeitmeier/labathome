@@ -596,6 +596,8 @@ ErrorCode DeviceManager::TriggerHeaterExperiment(const heaterexperiment::Request
 }
 
 void DeviceManager::HandleRecipeCommand(const std::string& json) {
+    ESP_LOGI(TAG, "[DEVICE_MGR] HandleRecipeCommand called");
+    
     if (!m_recipeService) {
         ESP_LOGE(TAG, "RecipeApplicationService not initialized");
         return;
@@ -603,10 +605,11 @@ void DeviceManager::HandleRecipeCommand(const std::string& json) {
     
     CommandDto dto;
     if (!JsonSerialization::deserialize(json, dto)) {
-        ESP_LOGE(TAG, "Failed to deserialize command");
+        ESP_LOGE(TAG, "[DEVICE_MGR] Failed to deserialize command");
         return;
     }
     
+    ESP_LOGI(TAG, "[DEVICE_MGR] Command parsed and forwarding");
     m_recipeService->handleCommand(dto);
 }
 

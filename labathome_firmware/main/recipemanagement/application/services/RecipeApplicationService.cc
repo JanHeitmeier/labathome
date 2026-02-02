@@ -46,6 +46,8 @@ void RecipeApplicationService::setMessageGateway(IMessageGateway *gateway)
 void RecipeApplicationService::handleCommand(const CommandDto &dto)
 {
     const std::string &cmd = dto.command;
+    ESP_LOGI(TAG, "[HANDLE_CMD] Received command");
+    
     if (cmd == "start_recipe")
     {
         if (!dto.payload.empty())
@@ -467,26 +469,45 @@ AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const
 }
 
 void RecipeApplicationService::handleGetExecutionHistory() {
-    if (!m_historyService || !m_gateway) return;
+    ESP_LOGI(TAG, "[GET_EXEC_HIST] handleGetExecutionHistory called");
     
+    if (!m_historyService || !m_gateway) {
+        ESP_LOGE(TAG, "[GET_EXEC_HIST] Missing historyService or gateway");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "[GET_EXEC_HIST] Calling getExecutionHistory");
     ExecutionHistoryDto dto = m_historyService->getExecutionHistory();
+    
+    ESP_LOGI(TAG, "[GET_EXEC_HIST] Sending ExecutionHistoryDto to frontend");
     m_gateway->send(dto);
 }
 
 void RecipeApplicationService::handleGetTimeSeries(const std::string& executionId) {
-    if (!m_historyService || !m_gateway) return;
+    ESP_LOGI(TAG, "[GET_TS] handleGetTimeSeries called for executionId='%s'", executionId.c_str());
+    
+    if (!m_historyService || !m_gateway) {
+        ESP_LOGE(TAG, "[GET_TS] Missing historyService or gateway!");
+        return;
+    }
     
     TimeSeriesDataDto dto;
     dto.executionId = executionId;
     
+    ESP_LOGI(TAG, "[GET_TS] Loading time series from storage...");
     std::vector<SensorTimeSeries> series = m_historyService->getTimeSeriesStorage()->loadTimeSeries(executionId);
+    
     if (series.empty()) {
-        ESP_LOGW(TAG, "TimeSeries for execution %s not found", executionId.c_str());
+        ESP_LOGW(TAG, "[GET_TS] TimeSeries for execution %s not found or empty", executionId.c_str());
         m_gateway->send(dto);
         return;
     }
     
+    ESP_LOGI(TAG, "[GET_TS] Found %zu series, converting to DTO...", series.size());
+    
     for (const auto& ts : series) {
+        ESP_LOGI(TAG, "  [GET_TS] Converting sensor '%s' with %zu data points", ts.sensorName.c_str(), ts.dataPoints.size());
+        
         SensorTimeSeriesDto sensorDto;
         sensorDto.sensorName = ts.sensorName;
         sensorDto.unit = ts.unit;
@@ -498,6 +519,8 @@ void RecipeApplicationService::handleGetTimeSeries(const std::string& executionI
         }
         dto.series.push_back(sensorDto);
     }
+    
+    ESP_LOGI(TAG, "[GET_TS] Sending TimeSeriesDataDto with %zu series to frontend", dto.series.size());
     m_gateway->send(dto);
 }
 

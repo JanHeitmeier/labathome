@@ -54,15 +54,21 @@ void RecipeHistoryService::endExecution(const std::string& executionId, Executio
 }
 
 ExecutionHistoryDto RecipeHistoryService::getExecutionHistory() {
+    ESP_LOGI(TAG, "[GET_HISTORY] getExecutionHistory called");
+    
     ExecutionHistoryDto dto;
     auto executions = m_execStorage->loadAll();
     
+    ESP_LOGI(TAG, "[GET_HISTORY] Storage returned executions");
+    
     dto.executions.reserve(executions.size());
     for (const auto& exec : executions) {
-        dto.executions.push_back(toDto(exec));
+        auto execDto = toDto(exec);
+        ESP_LOGI(TAG, "[GET_HISTORY] Adding execution");
+        dto.executions.push_back(execDto);
     }
     
-    ESP_LOGI(TAG, "Retrieved %zu executions", dto.executions.size());
+    ESP_LOGI(TAG, "[GET_HISTORY] Returning DTO");
     return dto;
 }
 

@@ -25,9 +25,11 @@ private:
     std::vector<SensorTimeSeries> m_buffer;
     mutable std::mutex m_mutex;
     bool m_recording;
+    uint64_t m_lastRecordedTimestamp;
     
     static constexpr size_t BUFFER_SIZE = 100;
     static constexpr size_t FLUSH_THRESHOLD = 80;
+    static constexpr uint64_t SAMPLING_INTERVAL_MS = 250;  // Record one point every 250ms
     
     void flushBuffer();
     size_t getTotalPoints() const;

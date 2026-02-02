@@ -5,7 +5,8 @@
 #include "application/dtos/AvailableStepsDto.hh"
 #include "application/dtos/AvailableRecipesDto.hh"
 #include "application/dtos/RecipeDto.hh"
-#include "application/dtos/MetricsDto.hh"
+#include "application/dtos/ExecutionHistoryDto.hh"
+#include "application/dtos/TimeSeriesDataDto.hh"
 #include "flatbuffers_cpp/ns11recipemanagement_generated.h"
 #include <esp_log.h>
 
@@ -73,7 +74,7 @@ webmanager::eMessageReceiverResult RecipeManagementPlugin::ProvideWebsocketMessa
     const char* json_cstr = request->payload()->json()->c_str();
     std::string json(json_cstr ? json_cstr : "{}");
     
-    ESP_LOGI(TAG, "Received JSON command: %s", json.c_str());
+    ESP_LOGI(TAG, "Received JSON command");
     
     // Forward to DeviceManager
     m_deviceManager->HandleRecipeCommand(json);
@@ -121,17 +122,17 @@ void RecipeManagementPlugin::send(const LiveViewDto& dto) {
 }
 
 void RecipeManagementPlugin::send(const AvailableStepsDto& dto) {
-    ESP_LOGI(TAG, "send(AvailableStepsDto) called with %d steps", dto.steps.size());
+    ESP_LOGI(TAG, "send(AvailableStepsDto) called");
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "Serialized to %d bytes", json.size());
+    ESP_LOGI(TAG, "Serialized");
     sendJsonWrapped(json);
     ESP_LOGI(TAG, "sendJsonWrapped completed");
 }
 
 void RecipeManagementPlugin::send(const AvailableRecipesDto& dto) {
-    ESP_LOGI(TAG, "send(AvailableRecipesDto) called with %d recipes", dto.recipes.size());
+    ESP_LOGI(TAG, "send(AvailableRecipesDto) called");
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "Serialized to %d bytes", json.size());
+    ESP_LOGI(TAG, "Serialized");
     sendJsonWrapped(json);
     ESP_LOGI(TAG, "sendJsonWrapped completed");
 }
@@ -142,8 +143,11 @@ void RecipeManagementPlugin::send(const RecipeDto& dto) {
 }
 
 void RecipeManagementPlugin::send(const ExecutionHistoryDto& dto) {
+    ESP_LOGI(TAG, "[SEND_EXEC_HIST] send ExecutionHistoryDto called");
     std::string json = JsonSerialization::serialize(dto);
+    ESP_LOGI(TAG, "[SEND_EXEC_HIST] Serialized");
     sendJsonWrapped(json);
+    ESP_LOGI(TAG, "[SEND_EXEC_HIST] sendJsonWrapped completed");
 }
 
 void RecipeManagementPlugin::send(const TimeSeriesDataDto& dto) {

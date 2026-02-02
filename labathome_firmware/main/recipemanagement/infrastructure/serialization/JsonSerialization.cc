@@ -75,6 +75,11 @@ bool JsonSerialization::serializeToBuffer(const LiveViewDto& dto, char* buffer, 
 }
 
 bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
+    if (!buffer || bufferSize == 0) {
+        outLength = 0;
+        return false;
+    }
+    
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     
@@ -89,37 +94,37 @@ bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* bu
         writer.StartObject();
         
         writer.Key("typeId");
-        writer.String(step.typeId.c_str());
+        writer.String(step.typeId.empty() ? "" : step.typeId.c_str());
         
         writer.Key("displayName");
-        writer.String(step.displayName.c_str());
+        writer.String(step.displayName.empty() ? "" : step.displayName.c_str());
         
         writer.Key("description");
-        writer.String(step.description.c_str());
+        writer.String(step.description.empty() ? "" : step.description.c_str());
         
         writer.Key("category");
-        writer.String(step.category.c_str());
+        writer.String(step.category.empty() ? "" : step.category.c_str());
         
         writer.Key("parameters");
         writer.StartArray();
         for (const auto& param : step.parameters) {
             writer.StartObject();
             writer.Key("name");
-            writer.String(param.name.c_str());
+            writer.String(param.name.empty() ? "" : param.name.c_str());
             writer.Key("type");
-            writer.String(param.type.c_str());
+            writer.String(param.type.empty() ? "" : param.type.c_str());
             writer.Key("description");
-            writer.String(param.description.c_str());
+            writer.String(param.description.empty() ? "" : param.description.c_str());
             writer.Key("defaultValue");
-            writer.String(param.defaultValue.c_str());
+            writer.String(param.defaultValue.empty() ? "" : param.defaultValue.c_str());
             writer.Key("minValue");
-            writer.String(param.minValue.c_str());
+            writer.String(param.minValue.empty() ? "" : param.minValue.c_str());
             writer.Key("maxValue");
-            writer.String(param.maxValue.c_str());
+            writer.String(param.maxValue.empty() ? "" : param.maxValue.c_str());
             writer.Key("required");
             writer.Bool(param.required);
             writer.Key("unit");
-            writer.String(param.unit.c_str());
+            writer.String(param.unit.empty() ? "" : param.unit.c_str());
             writer.EndObject();
         }
         writer.EndArray();
@@ -129,15 +134,15 @@ bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* bu
         for (const auto& io : step.ioAliases) {
             writer.StartObject();
             writer.Key("aliasName");
-            writer.String(io.aliasName.c_str());
+            writer.String(io.aliasName.empty() ? "" : io.aliasName.c_str());
             writer.Key("ioType");
-            writer.String(io.ioType.c_str());
+            writer.String(io.ioType.empty() ? "" : io.ioType.c_str());
             writer.Key("valueType");
-            writer.String(io.valueType.c_str());
+            writer.String(io.valueType.empty() ? "" : io.valueType.c_str());
             writer.Key("description");
-            writer.String(io.description.c_str());
+            writer.String(io.description.empty() ? "" : io.description.c_str());
             writer.Key("defaultPhysicalName");
-            writer.String(io.defaultPhysicalName.c_str());
+            writer.String(io.defaultPhysicalName.empty() ? "" : io.defaultPhysicalName.c_str());
             writer.EndObject();
         }
         writer.EndArray();
@@ -149,6 +154,7 @@ bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* bu
     writer.EndObject();
     
     if (sb.GetSize() >= bufferSize) {
+        ESP_LOGE("JsonSerialization", "Buffer too small for AvailableStepsDto");
         outLength = 0;
         return false;
     }
@@ -287,27 +293,29 @@ std::string JsonSerialization::serialize(const LiveViewDto& dto) {
 }
 
 std::string JsonSerialization::serialize(const AvailableStepsDto& dto) {
-    ESP_LOGI("JsonSerialization", "serialize(AvailableStepsDto) with %d steps", dto.steps.size());
+    ESP_LOGI("JsonSerialization", "serialize(AvailableStepsDto)");
     
-    // Heap allocation to avoid stack overflow (8KB is too large for stack)
-    constexpr size_t BUFFER_SIZE = 8192;
+    // Heap allocation to avoid stack overflow - increased to 16KB for large step lists
+    constexpr size_t BUFFER_SIZE = 16384;
     char* buffer = new(std::nothrow) char[BUFFER_SIZE];
     if (!buffer) {
-        ESP_LOGE("JsonSerialization", "Failed to allocate buffer!");
-        return "";
+        ESP_LOGE("JsonSerialization", "Failed to allocate buffer");
+        return "{}";
     }
     
-    size_t length;
+    size_t length = 0;
     bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, length);
     
-    if (success) {
-        ESP_LOGI("JsonSerialization", "Serialized successfully: %d bytes", length);
+    if (success && length > 0) {
+        ESP_LOGI("JsonSerialization", "Serialized successfully");
         std::string result(buffer, length);
         delete[] buffer;
         return result;
     }
     
-    ESP_LOGE("JsonSerialization", "Serialization FAILED!");
+    ESP_LOGE("JsonSerialization", "Serialization FAILED");
+    delete[] buffer;
+    return "{}";
     delete[] buffer;
     return "";
 }
@@ -492,6 +500,11 @@ bool JsonSerialization::deserialize(std::string_view json, RecipeDto& outDto) {
 }
 
 bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
+    if (!buffer || bufferSize == 0) {
+        outLength = 0;
+        return false;
+    }
+    
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     
@@ -504,11 +517,11 @@ bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* 
     for (const auto& exec : dto.executions) {
         writer.StartObject();
         writer.Key("executionId");
-        writer.String(exec.executionId.c_str());
+        writer.String(exec.executionId.empty() ? "" : exec.executionId.c_str());
         writer.Key("recipeId");
-        writer.String(exec.recipeId.c_str());
+        writer.String(exec.recipeId.empty() ? "" : exec.recipeId.c_str());
         writer.Key("recipeName");
-        writer.String(exec.recipeName.c_str());
+        writer.String(exec.recipeName.empty() ? "" : exec.recipeName.c_str());
         writer.Key("startTime");
         writer.Uint64(exec.startTime);
         writer.Key("endTime");
@@ -516,9 +529,9 @@ bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* 
         writer.Key("duration");
         writer.Uint64(exec.duration);
         writer.Key("status");
-        writer.String(exec.status.c_str());
+        writer.String(exec.status.empty() ? "" : exec.status.c_str());
         writer.Key("errorMessage");
-        writer.String(exec.errorMessage.c_str());
+        writer.String(exec.errorMessage.empty() ? "" : exec.errorMessage.c_str());
         writer.EndObject();
     }
     
@@ -526,6 +539,7 @@ bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* 
     writer.EndObject();
     
     if (sb.GetSize() >= bufferSize) {
+        ESP_LOGE("JsonSerialization", "Buffer too small for ExecutionHistoryDto");
         outLength = 0;
         return false;
     }
@@ -537,12 +551,26 @@ bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* 
 }
 
 std::string JsonSerialization::serialize(const ExecutionHistoryDto& dto) {
-    char buffer[8192];
-    size_t outLength;
-    if (serializeToBuffer(dto, buffer, sizeof(buffer), outLength)) {
-        return std::string(buffer, outLength);
+    ESP_LOGI("JsonSerialization", "[SERIALIZE] Serializing ExecutionHistoryDto");
+    
+    // Heap allocation to avoid stack overflow
+    constexpr size_t BUFFER_SIZE = 8192;
+    char* buffer = new(std::nothrow) char[BUFFER_SIZE];
+    if (!buffer) {
+        ESP_LOGE("JsonSerialization", "Failed to allocate buffer");
+        return "{}";
     }
-    return "";
+    
+    size_t outLength = 0;
+    if (serializeToBuffer(dto, buffer, BUFFER_SIZE, outLength) && outLength > 0) {
+        ESP_LOGI("JsonSerialization", "[SERIALIZE] Serialization complete");
+        std::string result(buffer, outLength);
+        delete[] buffer;
+        return result;
+    }
+    ESP_LOGE("JsonSerialization", "Failed to serialize ExecutionHistoryDto");
+    delete[] buffer;
+    return "{}";
 }
 
 bool JsonSerialization::serializeToBuffer(const TimeSeriesDataDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
@@ -553,16 +581,16 @@ bool JsonSerialization::serializeToBuffer(const TimeSeriesDataDto& dto, char* bu
     writer.Key("type");
     writer.String("timeseries_data");
     writer.Key("executionId");
-    writer.String(dto.executionId.c_str());
+    writer.String(dto.executionId.empty() ? "" : dto.executionId.c_str());
     writer.Key("series");
     writer.StartArray();
     
     for (const auto& sensor : dto.series) {
         writer.StartObject();
         writer.Key("sensorName");
-        writer.String(sensor.sensorName.c_str());
+        writer.String(sensor.sensorName.empty() ? "" : sensor.sensorName.c_str());
         writer.Key("unit");
-        writer.String(sensor.unit.c_str());
+        writer.String(sensor.unit.empty() ? "" : sensor.unit.c_str());
         writer.Key("dataPoints");
         writer.StartArray();
         for (const auto& point : sensor.dataPoints) {
@@ -581,6 +609,7 @@ bool JsonSerialization::serializeToBuffer(const TimeSeriesDataDto& dto, char* bu
     writer.EndObject();
     
     if (sb.GetSize() >= bufferSize) {
+        ESP_LOGE("JsonSerialization", "[SERIALIZE_TS] Buffer too small: need %zu, have %zu", sb.GetSize(), bufferSize);
         outLength = 0;
         return false;
     }
@@ -592,10 +621,25 @@ bool JsonSerialization::serializeToBuffer(const TimeSeriesDataDto& dto, char* bu
 }
 
 std::string JsonSerialization::serialize(const TimeSeriesDataDto& dto) {
-    char buffer[32768];
-    size_t outLength;
-    if (serializeToBuffer(dto, buffer, sizeof(buffer), outLength)) {
-        return std::string(buffer, outLength);
+    // Use heap allocation for large time series data (240 points = ~11KB + overhead)
+    constexpr size_t BUFFER_SIZE = 65536;  // 64KB for time series with many points
+    char* buffer = new (std::nothrow) char[BUFFER_SIZE];
+    if (!buffer) {
+        ESP_LOGE("JsonSerialization", "[SERIALIZE_TS] Failed to allocate buffer");
+        return "{}";
     }
-    return "";
+    
+    size_t outLength;
+    bool success = serializeToBuffer(dto, buffer, BUFFER_SIZE, outLength);
+    
+    std::string result;
+    if (success) {
+        result = std::string(buffer, outLength);
+    } else {
+        ESP_LOGE("JsonSerialization", "[SERIALIZE_TS] Serialization failed");
+        result = "{}";
+    }
+    
+    delete[] buffer;
+    return result;
 }
