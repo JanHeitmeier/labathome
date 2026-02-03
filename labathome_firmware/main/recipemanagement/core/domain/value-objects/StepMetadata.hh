@@ -64,7 +64,7 @@ struct IoAliasDef {
           exampleValue(std::move(exampleValue)),
           physicalName(std::move(physicalName)) {}
 
-    // Standard-Kopier- und Move-Operationen sind ausreichend
+    
     IoAliasDef(const IoAliasDef&) = default;
     IoAliasDef& operator=(const IoAliasDef&) = default;
     IoAliasDef(IoAliasDef&&) = default;

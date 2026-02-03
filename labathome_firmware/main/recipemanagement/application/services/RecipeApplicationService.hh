@@ -10,22 +10,15 @@
 #include "../../core/interfaces/storage/IRecipeStorage.hh"
 #include "../interfaces/IMessageGateway.hh"
 #include "../../infrastructure/engine/RecipeEngine.hh"
-#include "RecipeStorageManager.hh"
+#include "StorageManager.hh"
 #include "RecipeHistoryService.hh"
 #include <memory>
 #include <string>
 
 class RecipeApplicationService {
 public:
-    /**
-     * @brief Konstruktor
-     * @param storage Zeiger auf IRecipeStorage-Implementierung
-     * @param engine Zeiger auf RecipeEngine-Instanz
-     * @param gateway Zeiger auf IMessageGateway für ausgehende Nachrichten
-     * @param historyService Zeiger auf RecipeHistoryService (optional, kann nullptr sein)
-     */
     RecipeApplicationService(
-        IRecipeStorage* storage,
+        StorageManager* storageManager,
         RecipeEngine* engine,
         IMessageGateway* gateway,
         RecipeHistoryService* historyService = nullptr
@@ -33,12 +26,7 @@ public:
     
     ~RecipeApplicationService();
     
-    // Command-Verarbeitung
-    
     /**
-     * @brief Verarbeitet eingehende Befehle von der UI
-     * @param dto CommandDto mit Befehl und optionalen Parametern
-     * 
      * Unterstützte Commands:
      * - "start_recipe": Startet Rezept (recipeId erforderlich)
      * - "stop_recipe": Stoppt laufendes Rezept
@@ -56,21 +44,11 @@ public:
      */
     void handleCommand(const CommandDto& dto);
     
-    /**
-     * @brief Setzt den IMessageGateway für ausgehende Nachrichten
-     * @param gateway Zeiger auf IMessageGateway-Implementierung
-     * @note Wird vom DeviceManager aufgerufen nach Instanziierung
-     */
     void setMessageGateway(IMessageGateway* gateway);
     
-    /**
-     * @brief Sendet periodische Status-Updates an die UI
-     * @note Wird von RecipeEngine oder periodischem Timer aufgerufen
-     */
     void sendLiveViewUpdate();
     
 private:
-    // Befehlsverarbeitung (interne Handler)
     void handleStartRecipe(const std::string& recipeId);
     void handleStartRecipeFromJson(const std::string& jsonRecipe);
     void handleStopRecipe();
@@ -87,19 +65,16 @@ private:
     void handleDeleteExecution(const std::string& executionId);
     void handleRequestLiveView();
     
-    // Hilfsmethoden
     LiveViewDto buildLiveViewDto() const;
     AvailableRecipesDto buildAvailableRecipesDto() const;
     AvailableStepsDto buildAvailableStepsDto() const;
 
 private:
-    IRecipeStorage* m_storage;      // Storage-Implementierung (nicht owned)
-    RecipeStorageManager* m_storageManager;  // Storage-Manager (owned)
-    RecipeEngine* m_engine;         // Recipe-Engine (nicht owned)
-    IMessageGateway* m_gateway;     // Message-Gateway (nicht owned)
+    StorageManager* m_storageManager;
+    RecipeEngine* m_engine;
+    IMessageGateway* m_gateway;
     RecipeHistoryService* m_historyService;
     
-    // Kopier-/Move-Konstruktoren deaktivieren
     RecipeApplicationService(const RecipeApplicationService&) = delete;
     RecipeApplicationService& operator=(const RecipeApplicationService&) = delete;
     RecipeApplicationService(RecipeApplicationService&&) = delete;

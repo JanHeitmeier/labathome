@@ -385,6 +385,13 @@ bool JsonSerialization::deserialize(std::string_view json, CommandDto& outDto) {
         outDto.recipeId.clear();
     }
     
+    // executionId ist optional (für get_timeseries, delete_execution)
+    if (doc.HasMember("executionId") && doc["executionId"].IsString()) {
+        outDto.executionId = doc["executionId"].GetString();
+    } else {
+        outDto.executionId.clear();
+    }
+    
     // requestId ist optional (für Request/Response-Matching)
     if (doc.HasMember("requestId") && doc["requestId"].IsString()) {
         outDto.requestId = doc["requestId"].GetString();

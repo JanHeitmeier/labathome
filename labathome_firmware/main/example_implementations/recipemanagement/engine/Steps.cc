@@ -6,671 +6,402 @@
 #include "../../../recipemanagement/core/domain/value-objects/StepMetadata.hh"
 #include <chrono>
 
-// ==================== Step 1: RedLedButtonStep ====================
-// LED rot leuchten lassen, auf RedButton-Druck ausschalten, dann konfigurierbare Zeit warten
-class RedLedButtonStep : public StepBase
+// ==================== Test Step 1: Fan Ramp ====================
+// Skaliert den Fan von einem Start-Wert zu einem End-Wert über einen Zeitraum
+class FanRampStep : public StepBase
 {
 private:
-    IoAliasDef ledRed;
-    IoAliasDef btnRed;
-    ParamDef waitTimeParam;
-    bool buttonWasPressed;
+    IoAliasDef fanOutput;
+    ParamDef startDutyParam;
+    ParamDef endDutyParam;
+    ParamDef durationParam;
+    uint32_t startTime;
 
 public:
-    RedLedButtonStep()
-        : StepBase("RedLedButton", "Turn LED red, wait for red button press, then wait configured time", "1.0"),
-          ledRed("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
-          btnRed("RedButton", true, false, true, "bool", std::nullopt, "RedButton"),
-          waitTimeParam("waitTime", 
-                        ParameterValue::fromTimeMilliseconds(1000),
-                        "Wait Time",
-                        "Time to wait after button press",
-                        "ms",
-                        ParameterValue::fromTimeMilliseconds(100),
-                        ParameterValue::fromTimeMilliseconds(10000)),
-          buttonWasPressed(false)
+    FanRampStep()
+        : StepBase("FanRamp", "Ramp fan speed from start to end value over time", "1.0"),
+          fanOutput("Fan", false, true, false, "float", std::nullopt, "Fan"),
+          startDutyParam("startDuty", 
+                        ParameterValue::fromPercentage(0.0f),
+                        "Start Duty",
+                        "Fan duty cycle at start",
+                        "%",
+                        ParameterValue::fromPercentage(0.0f),
+                        ParameterValue::fromPercentage(100.0f)),
+          endDutyParam("endDuty", 
+                      ParameterValue::fromPercentage(100.0f),
+                      "End Duty",
+                      "Fan duty cycle at end",
+                      "%",
+                      ParameterValue::fromPercentage(0.0f),
+                      ParameterValue::fromPercentage(100.0f)),
+          durationParam("duration", 
+                       ParameterValue::fromTimeSeconds(10),
+                       "Duration",
+                       "Ramp duration",
+                       "s",
+                       ParameterValue::fromTimeSeconds(1),
+                       ParameterValue::fromTimeSeconds(300)),
+          startTime(0)
     {
-        registerIoAliases({&ledRed, &btnRed});
-        registerParamDefs({&waitTimeParam});
+        registerIoAliases({&fanOutput});
+        registerParamDefs({&startDutyParam, &endDutyParam, &durationParam});
     }
 
-    RedLedButtonStep(const RedLedButtonStep &o)
+    FanRampStep(const FanRampStep &o)
         : StepBase(o),
-          ledRed(o.ledRed),
-          btnRed(o.btnRed),
-          waitTimeParam(o.waitTimeParam),
-          buttonWasPressed(false)
+          fanOutput(o.fanOutput),
+          startDutyParam(o.startDutyParam),
+          endDutyParam(o.endDutyParam),
+          durationParam(o.durationParam),
+          startTime(0)
     {
-        registerIoAliases({&ledRed, &btnRed});
-        registerParamDefs({&waitTimeParam});
+        registerIoAliases({&fanOutput});
+        registerParamDefs({&startDutyParam, &endDutyParam, &durationParam});
     }
 
     void initialize() override
     {
         setState(State::Inactive);
-        buttonWasPressed = false;
+        startTime = 0;
     }
 
     void onActivating(StepContext &ctx) override
     {
-        // LED rot leuchten lassen (0xFF0000FF = red in RGBA format)
-        auto led = ctx.getOutput(ledRed.aliasName);
-        if (led) {
-            led->write(ParameterValue::fromGenericInt(0xFF0000FF)); // RGBA: Red
-            ESP_LOGI("Step_0x0001", "LED set to RED, waiting for button press");
-        } else {
-            ESP_LOGE("Step_0x0001", "ERROR: LED output not found!");
-        }
+        startTime = 0;
+        ctx.startTimer("ramp", std::chrono::milliseconds(1));
         setState(State::Activating);
-        buttonWasPressed = false;
+    }
+
+    void onActive(StepContext &ctx) override
+    {
+        if (state() == State::Activating && ctx.isTimerExpired("ramp"))
+        {
+            ctx.stopTimer("ramp");
+            startTime = esp_log_timestamp();
+            setState(State::Active);
+        }
+        else if (state() == State::Active)
+        {
+            uint32_t now = esp_log_timestamp();
+            uint32_t elapsed = now - startTime;
+            
+            float startDuty = readParamOrDefault(startDutyParam, 0.0f);
+            float endDuty = readParamOrDefault(endDutyParam, 100.0f);
+            uint32_t durationMs = readParamOrDefault(durationParam, uint32_t(10000));
+            
+            float progress = static_cast<float>(elapsed) / static_cast<float>(durationMs);
+            if (progress > 1.0f) progress = 1.0f;
+            
+            float currentDuty = startDuty + (endDuty - startDuty) * progress;
+            
+            auto fan = ctx.getOutput(fanOutput.aliasName);
+            if (fan) {
+                fan->write(ParameterValue::fromPercentage(currentDuty));
+            }
+        }
+    }
+
+    void onDeactivating(StepContext &ctx) override
+    {
+        auto fan = ctx.getOutput(fanOutput.aliasName);
+        if (fan) {
+            fan->write(ParameterValue::fromPercentage(0.0f));
+        }
+        setState(State::Deactivated);
+    }
+
+    void onDeactivated(StepContext & /*ctx*/) override {}
+
+    void onPauseImpl(StepContext &ctx) override
+    {
+        auto fan = ctx.getOutput(fanOutput.aliasName);
+        if (fan) {
+            fan->write(ParameterValue::fromPercentage(0.0f));
+        }
+    }
+
+    void onResumeImpl(StepContext &ctx) override
+    {
+        if (wasPaused() && state() == State::Active) {
+            startTime = esp_log_timestamp();
+        }
+    }
+
+    bool isTransitionConditionMet(StepContext &ctx) override
+    {
+        if (state() == State::Active)
+        {
+            uint32_t now = esp_log_timestamp();
+            uint32_t elapsed = now - startTime;
+            uint32_t durationMs = readParamOrDefault(durationParam, uint32_t(10000));
+            return elapsed >= durationMs;
+        }
+        return false;
+    }
+};
+
+// ==================== Test Step 2: LED Sequence ====================
+// Lässt 4 LEDs nacheinander mit konfigurierbaren Farben und Zeiten leuchten
+class LedSequenceStep : public StepBase
+{
+private:
+    IoAliasDef led0, led1, led2, led3;
+    ParamDef color0, color1, color2, color3;
+    ParamDef time0, time1, time2, time3;
+    uint8_t currentLed;
+
+public:
+    LedSequenceStep()
+        : StepBase("LedSequence", "Light 4 LEDs in sequence with configurable colors and times", "1.0"),
+          led0("LED0", false, true, false, "uint32_t", std::nullopt, "LED0"),
+          led1("LED1", false, true, false, "uint32_t", std::nullopt, "LED1"),
+          led2("LED2", false, true, false, "uint32_t", std::nullopt, "LED2"),
+          led3("LED3", false, true, false, "uint32_t", std::nullopt, "LED3"),
+          color0("color0", ParameterValue::fromGenericInt(0xFF0000FF), "Color LED0", "Color for first LED (RGBA)", "RGBA"),
+          color1("color1", ParameterValue::fromGenericInt(0x00FF00FF), "Color LED1", "Color for second LED (RGBA)", "RGBA"),
+          color2("color2", ParameterValue::fromGenericInt(0x0000FFFF), "Color LED2", "Color for third LED (RGBA)", "RGBA"),
+          color3("color3", ParameterValue::fromGenericInt(0xFFFF00FF), "Color LED3", "Color for fourth LED (RGBA)", "RGBA"),
+          time0("time0", ParameterValue::fromTimeMilliseconds(500), "Time LED0", "Duration for first LED", "ms",
+                ParameterValue::fromTimeMilliseconds(100), ParameterValue::fromTimeMilliseconds(10000)),
+          time1("time1", ParameterValue::fromTimeMilliseconds(500), "Time LED1", "Duration for second LED", "ms",
+                ParameterValue::fromTimeMilliseconds(100), ParameterValue::fromTimeMilliseconds(10000)),
+          time2("time2", ParameterValue::fromTimeMilliseconds(500), "Time LED2", "Duration for third LED", "ms",
+                ParameterValue::fromTimeMilliseconds(100), ParameterValue::fromTimeMilliseconds(10000)),
+          time3("time3", ParameterValue::fromTimeMilliseconds(500), "Time LED3", "Duration for fourth LED", "ms",
+                ParameterValue::fromTimeMilliseconds(100), ParameterValue::fromTimeMilliseconds(10000)),
+          currentLed(0)
+    {
+        registerIoAliases({&led0, &led1, &led2, &led3});
+        registerParamDefs({&color0, &color1, &color2, &color3, &time0, &time1, &time2, &time3});
+    }
+
+    LedSequenceStep(const LedSequenceStep &o)
+        : StepBase(o),
+          led0(o.led0), led1(o.led1), led2(o.led2), led3(o.led3),
+          color0(o.color0), color1(o.color1), color2(o.color2), color3(o.color3),
+          time0(o.time0), time1(o.time1), time2(o.time2), time3(o.time3),
+          currentLed(0)
+    {
+        registerIoAliases({&led0, &led1, &led2, &led3});
+        registerParamDefs({&color0, &color1, &color2, &color3, &time0, &time1, &time2, &time3});
+    }
+
+    void initialize() override
+    {
+        setState(State::Inactive);
+        currentLed = 0;
+    }
+
+    void onActivating(StepContext &ctx) override
+    {
+        currentLed = 0;
+        activateLed(ctx, 0);
+        setState(State::Activating);
     }
 
     void onActive(StepContext &ctx) override
     {
         if (state() == State::Activating)
         {
-            // Prüfe ob RedButton gedrückt wurde
-            auto btn = ctx.getInput(btnRed.aliasName);
-            if (btn)
+            setState(State::Active);
+        }
+        else if (state() == State::Active)
+        {
+            if (ctx.isTimerExpired("ledTimer"))
             {
-                auto val = btn->read();
-                if (val.isType(ParameterType::BOOLEAN))
+                ctx.stopTimer("ledTimer");
+                deactivateLed(ctx, currentLed);
+                currentLed++;
+                
+                if (currentLed < 4) {
+                    activateLed(ctx, currentLed);
+                }
+            }
+        }
+    }
+
+    void onDeactivating(StepContext &ctx) override
+    {
+        for (uint8_t i = 0; i < 4; i++) {
+            deactivateLed(ctx, i);
+        }
+        setState(State::Deactivated);
+    }
+
+    void onDeactivated(StepContext & /*ctx*/) override {}
+
+    void onPauseImpl(StepContext &ctx) override
+    {
+        deactivateLed(ctx, currentLed);
+    }
+
+    void onResumeImpl(StepContext &ctx) override
+    {
+        if (wasPaused() && state() == State::Active) {
+            activateLed(ctx, currentLed);
+        }
+    }
+
+    bool isTransitionConditionMet(StepContext &ctx) override
+    {
+        return state() == State::Active && currentLed >= 4;
+    }
+
+private:
+    void activateLed(StepContext &ctx, uint8_t ledIndex)
+    {
+        IoAliasDef* ledDef = nullptr;
+        ParamDef* colorDef = nullptr;
+        ParamDef* timeDef = nullptr;
+        
+        switch(ledIndex) {
+            case 0: ledDef = &led0; colorDef = &color0; timeDef = &time0; break;
+            case 1: ledDef = &led1; colorDef = &color1; timeDef = &time1; break;
+            case 2: ledDef = &led2; colorDef = &color2; timeDef = &time2; break;
+            case 3: ledDef = &led3; colorDef = &color3; timeDef = &time3; break;
+            default: return;
+        }
+        
+        auto led = ctx.getOutput(ledDef->aliasName);
+        if (led) {
+            uint32_t color = readParamOrDefault(*colorDef, uint32_t(0xFFFFFFFF));
+            led->write(ParameterValue::fromGenericInt(color));
+        }
+        
+        uint32_t timeMs = readParamOrDefault(*timeDef, uint32_t(500));
+        ctx.startTimer("ledTimer", std::chrono::milliseconds(timeMs));
+    }
+    
+    void deactivateLed(StepContext &ctx, uint8_t ledIndex)
+    {
+        IoAliasDef* ledDef = nullptr;
+        
+        switch(ledIndex) {
+            case 0: ledDef = &led0; break;
+            case 1: ledDef = &led1; break;
+            case 2: ledDef = &led2; break;
+            case 3: ledDef = &led3; break;
+            default: return;
+        }
+        
+        auto led = ctx.getOutput(ledDef->aliasName);
+        if (led) {
+            led->write(ParameterValue::fromGenericInt(0x00000000));
+        }
+    }
+};
+
+// ==================== Test Step 3: Movement LED Trigger ====================
+// Bei Movement-Erkennung wird eine LED für eine konfigurierbare Zeit eingeschaltet
+class MovementLedTriggerStep : public StepBase
+{
+private:
+    IoAliasDef movementInput;
+    IoAliasDef ledOutput;
+    ParamDef ledColorParam;
+    ParamDef durationParam;
+    bool movementDetected;
+    bool ledActive;
+
+public:
+    MovementLedTriggerStep()
+        : StepBase("MovementLedTrigger", "Turns on LED when movement detected for configured time", "1.0"),
+          movementInput("Movement", true, false, true, "bool", std::nullopt, "Movement"),
+          ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
+          ledColorParam("ledColor", 
+                       ParameterValue::fromGenericInt(0xFF00FFFF),
+                       "LED Color",
+                       "Color to display when movement detected (RGBA)",
+                       "RGBA"),
+          durationParam("duration", 
+                       ParameterValue::fromTimeMilliseconds(2000),
+                       "Duration",
+                       "How long LED stays on after movement",
+                       "ms",
+                       ParameterValue::fromTimeMilliseconds(100),
+                       ParameterValue::fromTimeMilliseconds(30000)),
+          movementDetected(false),
+          ledActive(false)
+    {
+        registerIoAliases({&movementInput, &ledOutput});
+        registerParamDefs({&ledColorParam, &durationParam});
+    }
+
+    MovementLedTriggerStep(const MovementLedTriggerStep &o)
+        : StepBase(o),
+          movementInput(o.movementInput),
+          ledOutput(o.ledOutput),
+          ledColorParam(o.ledColorParam),
+          durationParam(o.durationParam),
+          movementDetected(false),
+          ledActive(false)
+    {
+        registerIoAliases({&movementInput, &ledOutput});
+        registerParamDefs({&ledColorParam, &durationParam});
+    }
+
+    void initialize() override
+    {
+        setState(State::Inactive);
+        movementDetected = false;
+        ledActive = false;
+    }
+
+    void onActivating(StepContext &ctx) override
+    {
+        movementDetected = false;
+        ledActive = false;
+        ctx.startTimer("stepTimer", std::chrono::seconds(60));
+        setState(State::Activating);
+    }
+
+    void onActive(StepContext &ctx) override
+    {
+        if (state() == State::Activating)
+        {
+            setState(State::Active);
+        }
+        else if (state() == State::Active)
+        {
+            auto movement = ctx.getInput(movementInput.aliasName);
+            if (movement)
+            {
+                auto val = movement->read();
+                if (val.isType(ParameterType::BOOLEAN) && val.getBoolean())
                 {
-                    if (val.getBoolean() && !buttonWasPressed)
+                    if (!movementDetected)
                     {
-                        buttonWasPressed = true;
+                        movementDetected = true;
+                        ledActive = true;
                         
-                        // LED ausschalten
-                        auto led2 = ctx.getOutput(ledRed.aliasName);
-                        if (led2) {
-                            led2->write(ParameterValue::fromGenericInt(0x00000000));
+                        uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFF00FFFF));
+                        auto led = ctx.getOutput(ledOutput.aliasName);
+                        if (led) {
+                            led->write(ParameterValue::fromGenericInt(color));
                         }
                         
-                        // Konfigurierbare Wartezeit aus Parameter lesen
-                        uint32_t waitMs = readParamOrDefault(waitTimeParam, uint32_t(1000));
-                        ctx.startTimer("wait", std::chrono::milliseconds(waitMs));
-                        setState(State::Active);
-                        ESP_LOGI("Step_0x0001", "Button pressed - LED off, waiting 1000ms");
+                        uint32_t durationMs = readParamOrDefault(durationParam, uint32_t(2000));
+                        ctx.startTimer("ledTimer", std::chrono::milliseconds(durationMs));
                     }
                 }
             }
-        }
-        else if (state() == State::Active)
-        {
-            // Warte auf Timer - DON'T stop it here, let transition condition check it
-            if (ctx.isTimerExpired("wait"))
-            {
-                ESP_LOGI("Step_0x0001", "Timer expired - ready for transition");
-            }
-        }
-    }
-
-    void onDeactivating(StepContext &ctx) override
-    {
-        // LED sicherheitshalber ausschalten
-        auto led = ctx.getOutput(ledRed.aliasName);
-        if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
-        }
-        setState(State::Deactivated);
-    }
-
-    void onDeactivated(StepContext & /*ctx*/) override {}
-
-    void onPauseImpl(StepContext &ctx) override
-    {
-        auto led = ctx.getOutput(ledRed.aliasName);
-        if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
-            ESP_LOGI("Step_0x0001", "LED turned off during pause");
-        }
-    }
-
-    void onResumeImpl(StepContext &ctx) override
-    {
-        if (wasPaused() && state() == State::Activating) {
-            auto led = ctx.getOutput(ledRed.aliasName);
-            if (led) {
-                led->write(ParameterValue::fromGenericInt(0xFF0000FF));
-                ESP_LOGI("Step_0x0001", "LED restored to red after resume");
-            }
-        }
-    }
-
-    bool isTransitionConditionMet(StepContext &ctx) override
-    {
-        // Transition nur wenn State::Active und Timer abgelaufen
-        if (state() == State::Active)
-        {
-            bool timerDone = ctx.isTimerExpired("wait");
-            if (timerDone) {
-                ESP_LOGI("Step_0x0001", "==> Transition condition MET - cleaning up timer");
-                ctx.stopTimer("wait");
-            }
-            return timerDone;
-        }
-        return false;
-    }
-};
-
-
-// ==================== Step 2: YellowGreenLedButtonStep ====================
-// LED gelb für konfigurierbare Zeit, dann auf Knopfdruck grün, dann auf erneutem Knopfdruck fertig
-class YellowGreenLedButtonStep : public StepBase
-{
-private:
-    IoAliasDef ledYellow;
-    IoAliasDef btnGreen;
-    ParamDef yellowTimeParam;
-    bool firstPressDetected;
-    bool secondPressDetected;
-    bool wasPressed;
-    uint32_t ledColorBeforePause;
-
-public:
-    YellowGreenLedButtonStep()
-        : StepBase("YellowGreenLedButton", "LED yellow for configured time, green on button, off on second button", "1.0"),
-          ledYellow("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
-          btnGreen("GreenButton", true, false, true, "bool", std::nullopt, "GreenButton"),
-          yellowTimeParam("yellowTime",
-                          ParameterValue::fromTimeMilliseconds(2000),
-                          "Yellow Duration",
-                          "Time LED stays yellow",
-                          "ms",
-                          ParameterValue::fromTimeMilliseconds(500),
-                          ParameterValue::fromTimeMilliseconds(10000)),
-          firstPressDetected(false),
-          secondPressDetected(false),
-          wasPressed(false),
-          ledColorBeforePause(0)
-    {
-        registerIoAliases({&ledYellow, &btnGreen});
-        registerParamDefs({&yellowTimeParam});
-    }
-
-    YellowGreenLedButtonStep(const YellowGreenLedButtonStep &o)
-        : StepBase(o),
-          ledYellow(o.ledYellow),
-          btnGreen(o.btnGreen),
-          yellowTimeParam(o.yellowTimeParam),
-          firstPressDetected(false),
-          secondPressDetected(false),
-          wasPressed(false),
-          ledColorBeforePause(0)
-    {
-        registerIoAliases({&ledYellow, &btnGreen});
-        registerParamDefs({&yellowTimeParam});
-    }
-
-    void initialize() override
-    {
-        setState(State::Inactive);
-        firstPressDetected = false;
-        secondPressDetected = false;
-        wasPressed = false;
-        ledColorBeforePause = 0;
-    }
-
-    void onActivating(StepContext &ctx) override
-    {
-        // LED gelb leuchten lassen (0xFFFF00FF = yellow in RGBA format)
-        auto led = ctx.getOutput(ledYellow.aliasName);
-        if (led) {
-            led->write(ParameterValue::fromGenericInt(0xFFFF00FF)); // RGBA: Yellow
-        }
-        
-        // Konfigurierbare Timer-Dauer aus Parameter lesen
-        uint32_t yellowMs = readParamOrDefault(yellowTimeParam, uint32_t(2000));
-        ctx.startTimer("yellow", std::chrono::milliseconds(yellowMs));
-        setState(State::Activating);
-        firstPressDetected = false;
-        secondPressDetected = false;
-        wasPressed = false;
-        ESP_LOGI("Step_0x0002", "LED set to YELLOW for 2s");
-    }
-
-    void onActive(StepContext &ctx) override
-    {
-        auto btn = ctx.getInput(btnGreen.aliasName);
-        bool currentlyPressed = false;
-        
-        if (btn)
-        {
-            auto val = btn->read();
-            if (val.isType(ParameterType::BOOLEAN))
-            {
-                currentlyPressed = val.getBoolean();
-            }
-        }
-
-        if (state() == State::Activating)
-        {
-            // Warte auf Timer-Ablauf
-            if (ctx.isTimerExpired("yellow"))
-            {
-                ctx.stopTimer("yellow");
-                setState(State::Active);
-                ESP_LOGI("Step_0x0002", "2s elapsed - waiting for button press");
-            }
-        }
-        else if (state() == State::Active)
-        {
-            if (!firstPressDetected)
-            {
-                // Warte auf ersten Button-Druck (rising edge)
-                if (currentlyPressed && !wasPressed)
-                {
-                    firstPressDetected = true;
-                    
-                    // LED auf grün schalten (0x00FF00FF = green in RGBA format)
-                    auto led = ctx.getOutput(ledYellow.aliasName);
-                    if (led) {
-                        led->write(ParameterValue::fromGenericInt(0x00FF00FF)); // RGBA: Green
-                    }
-                    ESP_LOGI("Step_0x0002", "First press - LED now GREEN");
-                }
-            }
-            else if (!secondPressDetected)
-            {
-                // Warte auf zweiten Button-Druck (rising edge)
-                if (currentlyPressed && !wasPressed)
-                {
-                    secondPressDetected = true;
-                    
-                    // LED ausschalten
-                    auto led = ctx.getOutput(ledYellow.aliasName);
-                    if (led) {
-                        led->write(ParameterValue::fromGenericInt(0x00000000));
-                    }
-                    ESP_LOGI("Step_0x0002", "Second press - LED off, step complete");
-                }
-            }
-        }
-        
-        wasPressed = currentlyPressed;
-    }
-
-    void onDeactivating(StepContext &ctx) override
-    {
-        // LED sicherheitshalber ausschalten
-        auto led = ctx.getOutput(ledYellow.aliasName);
-        if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
-        }
-        setState(State::Deactivated);
-    }
-
-    void onDeactivated(StepContext & /*ctx*/) override {}
-
-    void onPauseImpl(StepContext &ctx) override
-    {
-        if (state() == State::Activating && !ctx.isTimerExpired("yellow")) {
-            ledColorBeforePause = 0xFFFF00FF;
-        } else if (state() == State::Active && firstPressDetected && !secondPressDetected) {
-            ledColorBeforePause = 0x00FF00FF;
-        } else {
-            ledColorBeforePause = 0;
-        }
-        
-        auto led = ctx.getOutput(ledYellow.aliasName);
-        if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
-            ESP_LOGI("Step_0x0002", "LED turned off during pause");
-        }
-    }
-
-    void onResumeImpl(StepContext &ctx) override
-    {
-        if (wasPaused() && ledColorBeforePause != 0) {
-            auto led = ctx.getOutput(ledYellow.aliasName);
-            if (led) {
-                led->write(ParameterValue::fromGenericInt(ledColorBeforePause));
-                ESP_LOGI("Step_0x0002", "LED color restored after resume");
-            }
-        }
-        ledColorBeforePause = 0;
-    }
-
-    bool isTransitionConditionMet(StepContext &ctx) override
-    {
-        if (state() == State::Active)
-        {
-            // Fertig wenn beide Buttons gedrückt wurden
-            bool done = firstPressDetected && secondPressDetected;
-            if (done) {
-                ESP_LOGI("Step_0x0002", "Transition condition met - both presses detected");
-            }
-            return done;
-        }
-        return false;
-    }
-};
-
-
-// ==================== Step 3: TwoLedTwoButtonStep ====================
-// 2 LEDs (rot + grün) leuchten, beide Buttons gleichzeitig → LEDs aus, dann fertig
-class TwoLedTwoButtonStep : public StepBase
-{
-private:
-    IoAliasDef ledRed;
-    IoAliasDef ledGreen;
-    IoAliasDef btnRed;
-    IoAliasDef btnGreen;
-
-public:
-    TwoLedTwoButtonStep()
-        : StepBase("TwoLedTwoButton", "Red+Green LEDs on, both buttons pressed to finish", "1.0"),
-          ledRed("LEDRed", false, true, false, "uint32_t", std::nullopt, "LED0"),
-          ledGreen("LEDGreen", false, true, false, "uint32_t", std::nullopt, "LED1"),
-          btnRed("RedButton", true, false, true, "bool", std::nullopt, "RedButton"),
-          btnGreen("GreenButton", true, false, true, "bool", std::nullopt, "GreenButton")
-    {
-        registerIoAliases({&ledRed, &ledGreen, &btnRed, &btnGreen});
-    }
-
-    TwoLedTwoButtonStep(const TwoLedTwoButtonStep &o)
-        : StepBase(o),
-          ledRed(o.ledRed),
-          ledGreen(o.ledGreen),
-          btnRed(o.btnRed),
-          btnGreen(o.btnGreen)
-    {
-        registerIoAliases({&ledRed, &ledGreen, &btnRed, &btnGreen});
-    }
-
-    void initialize() override
-    {
-        setState(State::Inactive);
-    }
-
-    void onActivating(StepContext &ctx) override
-    {
-        // Beide LEDs einschalten
-        auto ledR = ctx.getOutput(ledRed.aliasName);
-        auto ledG = ctx.getOutput(ledGreen.aliasName);
-        
-        if (ledR) {
-            ledR->write(ParameterValue::fromGenericInt(0xFF0000FF)); // RGBA: Red
-        }
-        if (ledG) {
-            ledG->write(ParameterValue::fromGenericInt(0x00FF00FF)); // RGBA: Green
-        }
-        
-        setState(State::Activating);
-        ESP_LOGI("Step_0x0003", "Both LEDs on - waiting for both buttons");
-    }
-
-    void onActive(StepContext &ctx) override
-    {
-        if (state() == State::Activating)
-        {
-            // Prüfe ob beide Buttons gleichzeitig gedrückt sind
-            auto btnR = ctx.getInput(btnRed.aliasName);
-            auto btnG = ctx.getInput(btnGreen.aliasName);
             
-            bool redPressed = false, greenPressed = false;
-            
-            if (btnR)
+            if (ledActive && ctx.isTimerExpired("ledTimer"))
             {
-                auto val = btnR->read();
-                if (val.isType(ParameterType::BOOLEAN))
-                {
-                    redPressed = val.getBoolean();
-                }
-            }
-            
-            if (btnG)
-            {
-                auto val = btnG->read();
-                if (val.isType(ParameterType::BOOLEAN))
-                {
-                    greenPressed = val.getBoolean();
-                }
-            }
-            
-            if (redPressed && greenPressed)
-            {
-                // Beide LEDs ausschalten
-                auto ledR = ctx.getOutput(ledRed.aliasName);
-                auto ledG = ctx.getOutput(ledGreen.aliasName);
-                
-                if (ledR) {
-                    ledR->write(ParameterValue::fromGenericInt(0x00000000));
-                }
-                if (ledG) {
-                    ledG->write(ParameterValue::fromGenericInt(0x00000000));
-                }
-                
-                setState(State::Active);
-                ESP_LOGI("Step_0x0003", "Both buttons pressed - LEDs off");
-            }
-        }
-    }
-
-    void onDeactivating(StepContext &ctx) override
-    {
-        // LEDs sicherheitshalber ausschalten
-        auto ledR = ctx.getOutput(ledRed.aliasName);
-        auto ledG = ctx.getOutput(ledGreen.aliasName);
-        
-        if (ledR) {
-            ledR->write(ParameterValue::fromGenericInt(0x00000000));
-        }
-        if (ledG) {
-            ledG->write(ParameterValue::fromGenericInt(0x00000000));
-        }
-        
-        setState(State::Deactivated);
-    }
-
-    void onDeactivated(StepContext & /*ctx*/) override {}
-
-    void onPauseImpl(StepContext &ctx) override
-    {
-        auto ledR = ctx.getOutput(ledRed.aliasName);
-        auto ledG = ctx.getOutput(ledGreen.aliasName);
-        if (ledR) ledR->write(ParameterValue::fromGenericInt(0x00000000));
-        if (ledG) ledG->write(ParameterValue::fromGenericInt(0x00000000));
-        ESP_LOGI("Step_0x0003", "LEDs turned off during pause");
-    }
-
-    void onResumeImpl(StepContext &ctx) override
-    {
-        if (wasPaused() && state() == State::Activating) {
-            auto ledR = ctx.getOutput(ledRed.aliasName);
-            auto ledG = ctx.getOutput(ledGreen.aliasName);
-            if (ledR) ledR->write(ParameterValue::fromGenericInt(0xFF0000FF));
-            if (ledG) ledG->write(ParameterValue::fromGenericInt(0x00FF00FF));
-            ESP_LOGI("Step_0x0003", "LEDs restored after resume");
-        }
-    }
-
-    bool isTransitionConditionMet(StepContext &ctx) override
-    {
-        if (state() == State::Active)
-        {
-            // Sofort fertig nach dem beide Buttons gedrückt wurden
-            ESP_LOGI("Step_0x0003", "Transition condition met - step complete");
-            return true;
-        }
-        return false;
-    }
-};
-
-
-// ==================== Step 4: FanControlStep ====================
-// Run fan at 50% for 5 seconds, then set to 0%
-class FanControlStep : public StepBase
-{
-private:
-    IoAliasDef fanOutput;
-    IoAliasDef fanSensor;
-    
-public:
-    FanControlStep()
-        : StepBase("FanControl", "Run fan at 50% for 5 seconds", "1.0"),
-          fanOutput("Fan", false, true, false, "float", std::nullopt, "Fan"),
-          fanSensor("FanSpeed", true, false, true, "float", std::nullopt, "Fan")
-    {
-        registerIoAliases({&fanOutput, &fanSensor});
-    }
-
-    FanControlStep(const FanControlStep &o)
-        : StepBase(o),
-          fanOutput(o.fanOutput),
-          fanSensor(o.fanSensor)
-    {
-        registerIoAliases({&fanOutput, &fanSensor});
-    }
-
-    void initialize() override
-    {
-        setState(State::Inactive);
-    }
-
-    void onActivating(StepContext &ctx) override
-    {
-        auto fan = ctx.getOutput(fanOutput.aliasName);
-        if (fan) {
-            fan->write(ParameterValue::fromPercentage(50.0f));
-            ESP_LOGI("FanControl", "Fan set to 50%%");
-        }
-        ctx.startTimer("fan_duration", std::chrono::milliseconds(5000));
-        setState(State::Active);
-    }
-
-    void onActive(StepContext &ctx) override
-    {
-        if (ctx.isTimerExpired("fan_duration"))
-        {
-            auto fan = ctx.getOutput(fanOutput.aliasName);
-            if (fan) {
-                fan->write(ParameterValue::fromPercentage(0.0f));
-                ESP_LOGI("FanControl", "Fan set to 0%% - step complete");
-            }
-        }
-    }
-
-    void onDeactivating(StepContext &ctx) override
-    {
-        auto fan = ctx.getOutput(fanOutput.aliasName);
-        if (fan) {
-            fan->write(ParameterValue::fromPercentage(0.0f));
-        }
-        setState(State::Deactivated);
-    }
-
-    void onDeactivated(StepContext & /*ctx*/) override {}
-
-    void onPauseImpl(StepContext &ctx) override
-    {
-        auto fan = ctx.getOutput(fanOutput.aliasName);
-        if (fan) {
-            fan->write(ParameterValue::fromPercentage(0.0f));
-            ESP_LOGI("FanControl", "Fan paused (set to 0%%)");
-        }
-    }
-
-    void onResumeImpl(StepContext &ctx) override
-    {
-        if (wasPaused() && state() == State::Active && !ctx.isTimerExpired("fan_duration")) {
-            auto fan = ctx.getOutput(fanOutput.aliasName);
-            if (fan) {
-                fan->write(ParameterValue::fromPercentage(50.0f));
-                ESP_LOGI("FanControl", "Fan resumed (set to 50%%)");
-            }
-        }
-    }
-
-    bool isTransitionConditionMet(StepContext &ctx) override
-    {
-        if (state() == State::Active && ctx.isTimerExpired("fan_duration"))
-        {
-            ctx.stopTimer("fan_duration");
-            return true;
-        }
-        return false;
-    }
-};
-
-
-// ==================== Step 5: InstructionConfirmationStep ====================
-// Request user confirmation, turn LED red, request confirmation to turn off
-class InstructionConfirmationStep : public StepBase
-{
-private:
-    enum class Phase {
-        WaitingFirstAck,    // Waiting for first acknowledgment
-        LedOn,              // LED is on, waiting for second acknowledgment
-        Completed           // Both acknowledgments done
-    };
-    
-    IoAliasDef ledRed;
-    Phase currentPhase;
-    
-public:
-    InstructionConfirmationStep()
-        : StepBase("InstructionConfirmation", "User confirmation with LED control", "1.0"),
-          ledRed("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
-          currentPhase(Phase::WaitingFirstAck)
-    {
-        registerIoAliases({&ledRed});
-    }
-
-    InstructionConfirmationStep(const InstructionConfirmationStep &o)
-        : StepBase(o),
-          ledRed(o.ledRed),
-          currentPhase(Phase::WaitingFirstAck)
-    {
-        registerIoAliases({&ledRed});
-    }
-
-    void initialize() override
-    {
-        setState(State::Inactive);
-        currentPhase = Phase::WaitingFirstAck;
-    }
-
-    void onActivating(StepContext &ctx) override
-    {
-        currentPhase = Phase::WaitingFirstAck;
-        ctx.requestUserAcknowledgment("Please confirm to turn on the red LED");
-        setState(State::Active);
-        ESP_LOGI("InstructionConfirm", "Awaiting first confirmation");
-    }
-
-    void onActive(StepContext &ctx) override
-    {
-        if (currentPhase == Phase::WaitingFirstAck)
-        {
-            if (ctx.isAcknowledged())
-            {
-                auto led = ctx.getOutput(ledRed.aliasName);
-                if (led) {
-                    led->write(ParameterValue::fromGenericInt(0xFF0000FF));
-                    ESP_LOGI("InstructionConfirm", "LED turned red - awaiting second confirmation");
-                }
-                ctx.requestUserAcknowledgment("LED is now red. Confirm to turn it off");
-                currentPhase = Phase::LedOn;
-            }
-        }
-        else if (currentPhase == Phase::LedOn)
-        {
-            if (ctx.isAcknowledged())
-            {
-                auto led = ctx.getOutput(ledRed.aliasName);
+                ctx.stopTimer("ledTimer");
+                auto led = ctx.getOutput(ledOutput.aliasName);
                 if (led) {
                     led->write(ParameterValue::fromGenericInt(0x00000000));
-                    ESP_LOGI("InstructionConfirm", "LED turned off - step complete");
                 }
-                currentPhase = Phase::Completed;
+                ledActive = false;
             }
         }
     }
 
     void onDeactivating(StepContext &ctx) override
     {
-        auto led = ctx.getOutput(ledRed.aliasName);
+        auto led = ctx.getOutput(ledOutput.aliasName);
         if (led) {
             led->write(ParameterValue::fromGenericInt(0x00000000));
         }
@@ -681,90 +412,106 @@ public:
 
     void onPauseImpl(StepContext &ctx) override
     {
-        if (currentPhase == Phase::LedOn) {
-            auto led = ctx.getOutput(ledRed.aliasName);
-            if (led) {
-                led->write(ParameterValue::fromGenericInt(0x00000000));
-                ESP_LOGI("InstructionConfirm", "LED turned off during pause");
-            }
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromGenericInt(0x00000000));
         }
     }
 
     void onResumeImpl(StepContext &ctx) override
     {
-        if (wasPaused() && currentPhase == Phase::LedOn) {
-            auto led = ctx.getOutput(ledRed.aliasName);
+        if (wasPaused() && ledActive) {
+            uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFF00FFFF));
+            auto led = ctx.getOutput(ledOutput.aliasName);
             if (led) {
-                led->write(ParameterValue::fromGenericInt(0xFF0000FF));
-                ESP_LOGI("InstructionConfirm", "LED restored after resume");
+                led->write(ParameterValue::fromGenericInt(color));
             }
         }
     }
 
     bool isTransitionConditionMet(StepContext &ctx) override
     {
-        if (currentPhase == Phase::Completed)
+        if (state() == State::Active)
         {
-            ESP_LOGI("InstructionConfirm", "Transition condition met - both acknowledgments received");
-            return true;
+            return ctx.isTimerExpired("stepTimer");
         }
         return false;
     }
 };
 
-
-// ==================== Step 6: FanCoolingTimed ====================
-// Request acknowledgment, then run fan at configured duty for configured time
-class FanCoolingTimed : public StepBase
+// ==================== Test Step 4: Acknowledgement LED and Fan ====================
+// LED leuchtet bis User Acknowledge drückt, dann läuft Fan für konfigurierbare Zeit
+class AcknowledgeLedFanStep : public StepBase
 {
 private:
+    IoAliasDef ledOutput;
     IoAliasDef fanOutput;
-    ParamDef fanDutyParam;
-    ParamDef durationParam;
-    
+    ParamDef ledColorParam;
+    ParamDef fanIntensityParam;
+    ParamDef fanDurationParam;
+    bool acknowledged;
+
 public:
-    FanCoolingTimed()
-        : StepBase("FanCoolingTimed", "Run fan at configured duty for configured time", "1.0"),
+    AcknowledgeLedFanStep()
+        : StepBase("AcknowledgeLedFan", "LED on until user acknowledges, then run fan at configured intensity", "1.0"),
+          ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
           fanOutput("Fan", false, true, false, "float", std::nullopt, "Fan"),
-          fanDutyParam("fanDuty",
-                       ParameterValue::fromPercentage(50.0f),
-                       "Fan Duty",
-                       "Fan duty cycle in percent",
-                       "%",
-                       ParameterValue::fromPercentage(10.0f),
-                       ParameterValue::fromPercentage(100.0f)),
-          durationParam("duration",
-                        ParameterValue::fromTimeMilliseconds(5000),
-                        "Duration",
-                        "Fan runtime duration",
-                        "ms",
-                        ParameterValue::fromTimeMilliseconds(1000),
-                        ParameterValue::fromTimeMilliseconds(60000))
+          ledColorParam("ledColor", 
+                       ParameterValue::fromGenericInt(0xFFFFFFFF),
+                       "LED Color",
+                       "Color while waiting for acknowledgement (RGBA)",
+                       "RGBA"),
+          fanIntensityParam("fanIntensity", 
+                           ParameterValue::fromPercentage(75.0f),
+                           "Fan Intensity",
+                           "Fan duty cycle after acknowledgement",
+                           "%",
+                           ParameterValue::fromPercentage(0.0f),
+                           ParameterValue::fromPercentage(100.0f)),
+          fanDurationParam("fanDuration", 
+                          ParameterValue::fromTimeSeconds(5),
+                          "Fan Duration",
+                          "How long fan runs after acknowledgement",
+                          "s",
+                          ParameterValue::fromTimeSeconds(1),
+                          ParameterValue::fromTimeSeconds(300)),
+          acknowledged(false)
     {
-        registerIoAliases({&fanOutput});
-        registerParamDefs({&fanDutyParam, &durationParam});
+        registerIoAliases({&ledOutput, &fanOutput});
+        registerParamDefs({&ledColorParam, &fanIntensityParam, &fanDurationParam});
     }
 
-    FanCoolingTimed(const FanCoolingTimed &o)
+    AcknowledgeLedFanStep(const AcknowledgeLedFanStep &o)
         : StepBase(o),
+          ledOutput(o.ledOutput),
           fanOutput(o.fanOutput),
-          fanDutyParam(o.fanDutyParam),
-          durationParam(o.durationParam)
+          ledColorParam(o.ledColorParam),
+          fanIntensityParam(o.fanIntensityParam),
+          fanDurationParam(o.fanDurationParam),
+          acknowledged(false)
     {
-        registerIoAliases({&fanOutput});
-        registerParamDefs({&fanDutyParam, &durationParam});
+        registerIoAliases({&ledOutput, &fanOutput});
+        registerParamDefs({&ledColorParam, &fanIntensityParam, &fanDurationParam});
     }
 
     void initialize() override
     {
         setState(State::Inactive);
+        acknowledged = false;
     }
 
     void onActivating(StepContext &ctx) override
     {
-        ctx.requestUserAcknowledgment("Acknowledge that Fan starts !");
+        acknowledged = false;
+        
+        uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFFFFFFFF));
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromGenericInt(color));
+        }
+        
+        ctx.requestUserAcknowledgment("Please confirm to proceed with fan operation");
         setState(State::Activating);
-        ESP_LOGI("FanCoolingTimed", "Awaiting acknowledgment to start fan");
     }
 
     void onActive(StepContext &ctx) override
@@ -773,38 +520,38 @@ public:
         {
             if (ctx.isAcknowledged())
             {
-                float duty = readParamOrDefault(fanDutyParam, 50.0f);
-                uint32_t durationMs = readParamOrDefault(durationParam, uint32_t(5000));
+                acknowledged = true;
                 
-                auto fan = ctx.getOutput(fanOutput.aliasName);
-                if (fan) {
-                    fan->write(ParameterValue::fromPercentage(duty));
-                    ESP_LOGI("FanCoolingTimed", "Fan set to %.1f%% for %lu ms", duty, (unsigned long)durationMs);
+                auto led = ctx.getOutput(ledOutput.aliasName);
+                if (led) {
+                    led->write(ParameterValue::fromGenericInt(0x00000000));
                 }
                 
-                ctx.startTimer("fan_duration", std::chrono::milliseconds(durationMs));
+                float fanIntensity = readParamOrDefault(fanIntensityParam, 75.0f);
+                auto fan = ctx.getOutput(fanOutput.aliasName);
+                if (fan) {
+                    fan->write(ParameterValue::fromPercentage(fanIntensity));
+                }
+                
+                uint32_t durationMs = readParamOrDefault(fanDurationParam, uint32_t(5000));
+                ctx.startTimer("fanTimer", std::chrono::milliseconds(durationMs));
                 setState(State::Active);
-            }
-        }
-        else if (state() == State::Active)
-        {
-            if (ctx.isTimerExpired("fan_duration"))
-            {
-                auto fan = ctx.getOutput(fanOutput.aliasName);
-                if (fan) {
-                    fan->write(ParameterValue::fromPercentage(0.0f));
-                    ESP_LOGI("FanCoolingTimed", "Fan stopped - step complete");
-                }
             }
         }
     }
 
     void onDeactivating(StepContext &ctx) override
     {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromGenericInt(0x00000000));
+        }
+        
         auto fan = ctx.getOutput(fanOutput.aliasName);
         if (fan) {
             fan->write(ParameterValue::fromPercentage(0.0f));
         }
+        
         setState(State::Deactivated);
     }
 
@@ -812,111 +559,46 @@ public:
 
     void onPauseImpl(StepContext &ctx) override
     {
-        if (state() == State::Active) {
-            auto fan = ctx.getOutput(fanOutput.aliasName);
-            if (fan) {
-                fan->write(ParameterValue::fromPercentage(0.0f));
-                ESP_LOGI("FanCoolingTimed", "Fan paused (set to 0%%)");
-            }
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromGenericInt(0x00000000));
+        }
+        
+        auto fan = ctx.getOutput(fanOutput.aliasName);
+        if (fan) {
+            fan->write(ParameterValue::fromPercentage(0.0f));
         }
     }
 
     void onResumeImpl(StepContext &ctx) override
     {
-        if (wasPaused() && state() == State::Active && !ctx.isTimerExpired("fan_duration")) {
-            float duty = readParamOrDefault(fanDutyParam, 50.0f);
-            auto fan = ctx.getOutput(fanOutput.aliasName);
-            if (fan) {
-                fan->write(ParameterValue::fromPercentage(duty));
-                ESP_LOGI("FanCoolingTimed", "Fan resumed (set to %.1f%%)", duty);
+        if (wasPaused())
+        {
+            if (!acknowledged) {
+                uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFFFFFFFF));
+                auto led = ctx.getOutput(ledOutput.aliasName);
+                if (led) {
+                    led->write(ParameterValue::fromGenericInt(color));
+                }
+            } else {
+                float fanIntensity = readParamOrDefault(fanIntensityParam, 75.0f);
+                auto fan = ctx.getOutput(fanOutput.aliasName);
+                if (fan) {
+                    fan->write(ParameterValue::fromPercentage(fanIntensity));
+                }
             }
         }
     }
 
     bool isTransitionConditionMet(StepContext &ctx) override
     {
-        if (state() == State::Active && ctx.isTimerExpired("fan_duration"))
+        if (state() == State::Active)
         {
-            ctx.stopTimer("fan_duration");
-            return true;
-        }
-        return false;
-    }
-};
-
-
-// ==================== Step 7: SensorMovementTest ====================
-// Monitor movement sensor until user acknowledges
-class SensorMovementTest : public StepBase
-{
-private:
-    IoAliasDef movementSensor;
-    
-public:
-    SensorMovementTest()
-        : StepBase("SensorMovementTest", "Monitor movement sensor until acknowledged", "1.0"),
-          movementSensor("Movement", true, false, true, "bool", std::nullopt, "Movement")
-    {
-        registerIoAliases({&movementSensor});
-    }
-
-    SensorMovementTest(const SensorMovementTest &o)
-        : StepBase(o),
-          movementSensor(o.movementSensor)
-    {
-        registerIoAliases({&movementSensor});
-    }
-
-    void initialize() override
-    {
-        setState(State::Inactive);
-    }
-
-    void onActivating(StepContext &ctx) override
-    {
-        ctx.requestUserAcknowledgment("Monitor movement sensor - acknowledge when done");
-        setState(State::Active);
-        ESP_LOGI("SensorMovementTest", "Movement sensor monitoring started");
-    }
-
-    void onActive(StepContext &ctx) override
-    {
-        // Read movement sensor continuously
-        auto sensor = ctx.getInput(movementSensor.aliasName);
-        if (sensor) {
-            auto val = sensor->read();
-            if (val.isType(ParameterType::BOOLEAN)) {
-                bool movement = val.getBoolean();
-                ESP_LOGI("SensorMovementTest", "MOV %d", movement ? 1 : 0);
+            bool timerDone = ctx.isTimerExpired("fanTimer");
+            if (timerDone) {
+                ctx.stopTimer("fanTimer");
             }
-        }
-    }
-
-    void onDeactivating(StepContext &ctx) override
-    {
-        setState(State::Deactivated);
-        ESP_LOGI("SensorMovementTest", "Movement sensor monitoring stopped");
-    }
-
-    void onDeactivated(StepContext & /*ctx*/) override {}
-
-    void onPauseImpl(StepContext &ctx) override
-    {
-        ESP_LOGI("SensorMovementTest", "Monitoring paused");
-    }
-
-    void onResumeImpl(StepContext &ctx) override
-    {
-        ESP_LOGI("SensorMovementTest", "Monitoring resumed");
-    }
-
-    bool isTransitionConditionMet(StepContext &ctx) override
-    {
-        // Step is done when user acknowledges
-        if (state() == State::Active && ctx.isAcknowledged())
-        {
-            ESP_LOGI("SensorMovementTest", "Acknowledged - transition condition met");
-            return true;
+            return timerDone;
         }
         return false;
     }

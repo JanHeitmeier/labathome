@@ -19,7 +19,7 @@ class IMessageGateway;
 class IRecipeStorage;
 class RecipeEngine;
 class RecipeHistoryService;
-class TimeSeriesRecorder;
+class StorageManager;
 class IRecipeExecutionStorage;
 class ITimeSeriesStorage;
 
@@ -159,7 +159,7 @@ class DeviceManager:public FBContext
         RecipeEngine* m_recipeEngine;
         RecipeApplicationService* m_recipeService;
         RecipeHistoryService* m_historyService;
-        TimeSeriesRecorder* m_timeSeriesRecorder;
+        StorageManager* m_storageManager;
         IRecipeExecutionStorage* m_executionStorage;
         ITimeSeriesStorage* m_timeSeriesStorage;
         bool m_testCommandSent = false;

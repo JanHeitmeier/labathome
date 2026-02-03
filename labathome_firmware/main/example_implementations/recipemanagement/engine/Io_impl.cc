@@ -5,6 +5,8 @@
 #include "../../../iHAL.hh"
 #include <algorithm>
 
+// ==================== Button Inputs ====================
+
 class GreenButtonInput : public IInput {
 public:
     explicit GreenButtonInput(iHAL* hal) noexcept
@@ -49,6 +51,8 @@ private:
 };
 
 
+// ==================== Sensor Inputs ====================
+
 class MovementInput : public IInput {
 public:
     explicit MovementInput(iHAL* hal) noexcept
@@ -71,6 +75,30 @@ private:
 };
 
 
+class BrightnessInput : public IInput {
+public:
+    explicit BrightnessInput(iHAL* hal) noexcept
+        : hal_(hal) {}
+
+    ~BrightnessInput() override = default;
+
+    const char* name() const noexcept override {
+        return "BrightnessSensor";
+    }
+
+    ParameterValue read() const override {
+        float lux = 0.0f;
+        if (hal_) hal_->GetAmbientBrightness(&lux);
+        return ParameterValue::fromIlluminance(lux);
+    }
+
+private:
+    iHAL* hal_;
+};
+
+
+// ==================== Outputs ====================
+
 class FanOutput : public IOutput {
 public:
     explicit FanOutput(iHAL* hal, uint8_t fanIndex, const char* name = "Fan") noexcept
@@ -87,22 +115,19 @@ public:
 
         float duty = 0.0f;
         
-        // Verwende typsichere Getter der neuen ParameterValue-Architektur
         if (v.isType(ParameterType::PERCENTAGE)) {
             duty = v.getPercentage();
         } else if (v.isType(ParameterType::BOOLEAN)) {
             duty = v.getBoolean() ? 100.0f : 0.0f;
         } else if (v.isType(ParameterType::RPM)) {
-            // RPM zu Prozent (0-10000 RPM → 0-100%)
             duty = static_cast<float>(v.getRPM()) / 100.0f;
         } else if (v.isType(ParameterType::GENERIC_INT)) {
             duty = static_cast<float>(v.getGenericInt());
+        } else if (v.isType(ParameterType::ILLUMINANCE)) {
+            duty = v.getIlluminance();
         }
 
-        // Clamp to [0, 100]
         duty = std::clamp(duty, 0.0f, 100.0f);
-
-        // Call HAL
         hal_->SetFanDuty(index_, duty);
     }
 
@@ -127,13 +152,12 @@ public:
     void write(const ParameterValue& v) override {
         if (!hal_) return;
 
-        // Verwende typsichere Getter der neuen ParameterValue-Architektur
         uint32_t color = 0;
         
         if (v.isType(ParameterType::GENERIC_INT)) {
             color = static_cast<uint32_t>(v.getGenericInt());
         } else if (v.isType(ParameterType::BOOLEAN)) {
-            color = v.getBoolean() ? 0xFFFFFFFF : 0x00000000; // White on true, off on false
+            color = v.getBoolean() ? 0xFFFFFF : 0x000000;
         }
 
         hal_->ColorizeLed(index_, color);

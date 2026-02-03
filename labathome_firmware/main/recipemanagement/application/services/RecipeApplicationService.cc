@@ -10,11 +10,10 @@
 static const char* TAG = "RecipeAppService";
 
 RecipeApplicationService::RecipeApplicationService(
-    IRecipeStorage *storage,
+    StorageManager *storageManager,
     RecipeEngine *engine,
     IMessageGateway *gateway,
-    RecipeHistoryService* historyService) : m_storage(storage),
-                                m_storageManager(new RecipeStorageManager(storage)),
+    RecipeHistoryService* historyService) : m_storageManager(storageManager),
                                 m_engine(engine),
                                 m_gateway(gateway),
                                 m_historyService(historyService)
@@ -27,7 +26,6 @@ RecipeApplicationService::RecipeApplicationService(
 }
 RecipeApplicationService::~RecipeApplicationService()
 {
-    delete m_storageManager;
 }
 static uint32_t calculateRecipeIdHash(const std::string &recipeId)
 {
@@ -46,71 +44,84 @@ void RecipeApplicationService::setMessageGateway(IMessageGateway *gateway)
 void RecipeApplicationService::handleCommand(const CommandDto &dto)
 {
     const std::string &cmd = dto.command;
-    ESP_LOGI(TAG, "[HANDLE_CMD] Received command");
     
     if (cmd == "start_recipe")
     {
         if (!dto.payload.empty())
         {
+            ESP_LOGI(TAG, "Called handleStartRecipeFromJson()");
             handleStartRecipeFromJson(dto.payload);
         }
         else
         {
+            ESP_LOGI(TAG, "Called handleStartRecipe()");
             handleStartRecipe(dto.recipeId);
         }
     }
     else if (cmd == "stop_recipe")
     {
+        ESP_LOGI(TAG, "Called handleStopRecipe()");
         handleStopRecipe();
     }
     else if (cmd == "pause_recipe")
     {
+        ESP_LOGI(TAG, "Called handlePauseRecipe()");
         handlePauseRecipe();
     }
     else if (cmd == "resume_recipe")
     {
+        ESP_LOGI(TAG, "Called handleResumeRecipe()");
         handleResumeRecipe();
     }
     else if (cmd == "acknowledge_step")
     {
-        ESP_LOGI(TAG, "Command received: acknowledge_step");
+        ESP_LOGI(TAG, "Called handleAcknowledgeStep()");
         handleAcknowledgeStep();
     }
     else if (cmd == "get_recipe_list")
     {
+        ESP_LOGI(TAG, "Called handleGetRecipeList()");
         handleGetRecipeList();
     }
     else if (cmd == "get_available_steps")
     {
+        ESP_LOGI(TAG, "Called handleGetAvailableSteps()");
         handleGetAvailableSteps();
     }
     else if (cmd == "save_recipe")
     {
+        ESP_LOGI(TAG, "Called handleSaveRecipe()");
         handleSaveRecipe(dto.payload);
     }
     else if (cmd == "delete_recipe")
     {
+        ESP_LOGI(TAG, "Called handleDeleteRecipe()");
         handleDeleteRecipe(dto.recipeId);
     }
     else if (cmd == "get_recipe")
     {
+        ESP_LOGI(TAG, "Called handleGetRecipe()");
         handleGetRecipe(dto.recipeId);
     }
     else if (cmd == "request_live_view")
     {
+        ESP_LOGI(TAG, "Called handleRequestLiveView()");
         handleRequestLiveView();
     }
     else if (cmd == "get_execution_history")
     {
+        ESP_LOGI(TAG, "Called handleGetExecutionHistory()");
         handleGetExecutionHistory();
     }
     else if (cmd == "get_timeseries")
     {
-        handleGetTimeSeries(dto.recipeId);
+        ESP_LOGI(TAG, "Called handleGetTimeSeries(%s)", dto.executionId.c_str());
+        handleGetTimeSeries(dto.executionId);
     }
     else if (cmd == "delete_execution")
     {
-        handleDeleteExecution(dto.recipeId);
+        ESP_LOGI(TAG, "Called handleDeleteExecution(%s)", dto.executionId.c_str());
+        handleDeleteExecution(dto.executionId);
     }
 }
 void RecipeApplicationService::handleStartRecipeFromJson(const std::string &jsonRecipe)
@@ -127,7 +138,7 @@ void RecipeApplicationService::handleStartRecipeFromJson(const std::string &json
     }
     uint32_t recipeIdHash = calculateRecipeIdHash(recipe.id());
     m_storageManager->saveRecipeWithCache(recipeIdHash, jsonRecipe, recipe);
-    if (!m_engine->loadRecipe(recipe.steps(), recipe.id()))
+    if (!m_engine->loadRecipe(recipe.steps(), recipe.id(), recipe.name()))
     {
         return;
     }
@@ -152,7 +163,7 @@ void RecipeApplicationService::handleStartRecipe(const std::string &recipeId)
         return;
     }
 
-    if (!m_engine->loadRecipe(recipe.steps(), recipe.id()))
+    if (!m_engine->loadRecipe(recipe.steps(), recipe.id(), recipe.name()))
     {
         return;
     }
@@ -185,14 +196,11 @@ void RecipeApplicationService::handleResumeRecipe()
 }
 void RecipeApplicationService::handleAcknowledgeStep()
 {
-    ESP_LOGI(TAG, "handleAcknowledgeStep called");
     if (!m_engine)
     {
-        ESP_LOGW(TAG, "No engine available for acknowledgment");
         return;
     }
     m_engine->acknowledgeStep();
-    ESP_LOGI(TAG, "Engine acknowledgeStep() executed");
 }
 void RecipeApplicationService::handleGetRecipeList()
 {
@@ -345,13 +353,6 @@ AvailableRecipesDto RecipeApplicationService::buildAvailableRecipesDto() const
     AvailableRecipesDto dto;
     if (!m_storageManager)
     {
-        RecipeInfoDto recipe1;
-        recipe1.id = "recipe_001";
-        recipe1.name = "Fermentation Process";
-        recipe1.description = "Standard fermentation with temperature control";
-        recipe1.createdAt = 1699200000000;
-        recipe1.lastModified = 1699200000000;
-        dto.recipes.push_back(recipe1);
         return dto;
     }
     auto recipeIds = m_storageManager->getAllJsonRecipeIds();
@@ -398,30 +399,14 @@ AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const
             paramDto.unit = param.unit;
             paramDto.required = true;
             ParameterType pType = param.value.getType();
-            switch (pType)
-            {
-            case ParameterType::TEMPERATURE:
-            case ParameterType::PRESSURE:
-            case ParameterType::HUMIDITY:
-            case ParameterType::PERCENTAGE:
-            case ParameterType::VOLUME:
-            case ParameterType::MASS:
-            case ParameterType::LENGTH:
-            case ParameterType::VOLTAGE:
-            case ParameterType::CURRENT:
-            case ParameterType::POWER:
-            case ParameterType::CONCENTRATION:
-            case ParameterType::PH_VALUE:
-            case ParameterType::VELOCITY:
-            case ParameterType::ANGLE:
-                paramDto.type = "float";
-                break;
-            case ParameterType::BOOLEAN:
+            if (pType == ParameterType::BOOLEAN) {
                 paramDto.type = "bool";
-                break;
-            default:
+            } else if (pType == ParameterType::NONE || pType == ParameterType::GENERIC_INT || 
+                       pType == ParameterType::RPM || pType == ParameterType::TIME_SECONDS || 
+                       pType == ParameterType::TIME_MILLISECONDS || pType == ParameterType::FLOW_RATE) {
                 paramDto.type = "int";
-                break;
+            } else {
+                paramDto.type = "float";
             }
             paramDto.defaultValue = param.value.toNumericString();
             if (param.minValue.has_value())
@@ -469,65 +454,27 @@ AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const
 }
 
 void RecipeApplicationService::handleGetExecutionHistory() {
-    ESP_LOGI(TAG, "[GET_EXEC_HIST] handleGetExecutionHistory called");
-    
     if (!m_historyService || !m_gateway) {
-        ESP_LOGE(TAG, "[GET_EXEC_HIST] Missing historyService or gateway");
         return;
     }
     
-    ESP_LOGI(TAG, "[GET_EXEC_HIST] Calling getExecutionHistory");
     ExecutionHistoryDto dto = m_historyService->getExecutionHistory();
-    
-    ESP_LOGI(TAG, "[GET_EXEC_HIST] Sending ExecutionHistoryDto to frontend");
     m_gateway->send(dto);
 }
 
 void RecipeApplicationService::handleGetTimeSeries(const std::string& executionId) {
-    ESP_LOGI(TAG, "[GET_TS] handleGetTimeSeries called for executionId='%s'", executionId.c_str());
-    
-    if (!m_historyService || !m_gateway) {
-        ESP_LOGE(TAG, "[GET_TS] Missing historyService or gateway!");
+    if (!m_storageManager || !m_gateway) {
         return;
     }
     
-    TimeSeriesDataDto dto;
-    dto.executionId = executionId;
-    
-    ESP_LOGI(TAG, "[GET_TS] Loading time series from storage...");
-    std::vector<SensorTimeSeries> series = m_historyService->getTimeSeriesStorage()->loadTimeSeries(executionId);
-    
-    if (series.empty()) {
-        ESP_LOGW(TAG, "[GET_TS] TimeSeries for execution %s not found or empty", executionId.c_str());
-        m_gateway->send(dto);
-        return;
-    }
-    
-    ESP_LOGI(TAG, "[GET_TS] Found %zu series, converting to DTO...", series.size());
-    
-    for (const auto& ts : series) {
-        ESP_LOGI(TAG, "  [GET_TS] Converting sensor '%s' with %zu data points", ts.sensorName.c_str(), ts.dataPoints.size());
-        
-        SensorTimeSeriesDto sensorDto;
-        sensorDto.sensorName = ts.sensorName;
-        sensorDto.unit = ts.unit;
-        for (const auto& pt : ts.dataPoints) {
-            TimeSeriesPointDto ptDto;
-            ptDto.timestamp = pt.timestamp;
-            ptDto.value = pt.value;
-            sensorDto.dataPoints.push_back(ptDto);
-        }
-        dto.series.push_back(sensorDto);
-    }
-    
-    ESP_LOGI(TAG, "[GET_TS] Sending TimeSeriesDataDto with %zu series to frontend", dto.series.size());
+    TimeSeriesDataDto dto = m_storageManager->getTimeSeries(executionId);
     m_gateway->send(dto);
 }
 
 void RecipeApplicationService::handleDeleteExecution(const std::string& executionId) {
-    if (!m_historyService) return;
+    if (!m_storageManager) return;
     
-    m_historyService->deleteExecution(executionId);
+    m_storageManager->deleteExecution(executionId);
     handleGetExecutionHistory();
 }
 

@@ -26,10 +26,9 @@ idf_component_register(
         # === Infrastructure - Storage ===
         
         # === Application Layer ===
-        "application/services/RecipeStorageManager.cc"
+        "application/services/StorageManager.cc"
         "application/services/RecipeApplicationService.cc"
         "application/services/RecipeHistoryService.cc"
-        "application/services/TimeSeriesRecorder.cc"
         
         # === Application - Use Cases (optional, momentan nicht verwendet) ===
         # "application/usecases/CreateRecipeUseCase.cc"

@@ -6,6 +6,7 @@
 struct CommandDto {
     std::string command;
     std::string recipeId;
+    std::string executionId;  // For get_timeseries, delete_execution commands
     std::string payload;
     std::string requestId;
 };

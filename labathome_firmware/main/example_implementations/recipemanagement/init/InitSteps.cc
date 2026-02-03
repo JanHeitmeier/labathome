@@ -13,15 +13,11 @@
  * - Gespeichert wird nur eine Factory-Funktion zum späteren Erzeugen
  */
 void StepTypeRegistry::init() {
-    // Registriere alle verfügbaren Steps (Template-Syntax
-     
-    registerStepType<RedLedButtonStep>();
-    registerStepType<YellowGreenLedButtonStep>();
-    registerStepType<TwoLedTwoButtonStep>();
-    registerStepType<FanControlStep>();
-    registerStepType<InstructionConfirmationStep>();
-    registerStepType<FanCoolingTimed>();
-    registerStepType<SensorMovementTest>();
+    // Test Steps
+    registerStepType<FanRampStep>();
+    registerStepType<LedSequenceStep>();
+    registerStepType<MovementLedTriggerStep>();
+    registerStepType<AcknowledgeLedFanStep>();
     
     // Steps werden nur on-demand erzeugt wenn:
     // 1. Metadaten für Web-UI angefordert werden

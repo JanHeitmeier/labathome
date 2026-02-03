@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <string>
+#include <cstring>
+#include <cmath>
 
 // DESIGN PRINCIPLES:
 // - No heap allocations
@@ -33,7 +35,8 @@ enum class ParameterType : uint8_t {
     VELOCITY,           // mm/s
     ANGLE,              // Degrees * 10 (900 = 90.0°, range 0-3600)
     BOOLEAN,            // bool (0 or 1)
-    GENERIC_INT         // Generic integer value
+    GENERIC_INT,        // Generic integer value
+    ILLUMINANCE         // Lux (illuminance in lux, range 0-100000)
 };
 
 // TEMPERATURE UNITS
@@ -444,6 +447,13 @@ public:
         return pv;
     }
     
+    static ParameterValue fromIlluminance(float lux) {
+        ParameterValue pv;
+        pv.m_type = ParameterType::ILLUMINANCE;
+        pv.m_rawValue = static_cast<uint32_t>(lux);
+        return pv;
+    }
+    
     // ========================================================================
     // GETTER-METHODEN (Output-Seite)
     // ========================================================================
@@ -536,6 +546,73 @@ public:
     
     float getAngle() const {
         return (m_type == ParameterType::ANGLE) ? m_rawValue / 10.0f : 0.0f;
+    }
+    
+    float getIlluminance() const {
+        return (m_type == ParameterType::ILLUMINANCE) ? static_cast<float>(m_rawValue) : 0.0f;
+    }
+    
+    // ========================================================================
+    // UNIVERSAL FLOAT CONVERSION
+    // ========================================================================
+    
+    /**
+     * @brief Convert any ParameterValue to float representation
+     * 
+     * Provides standardized conversion for all parameter types to float.
+     * Used primarily for sensor data recording and visualization.
+     * 
+     * @param tempUnit Temperature unit for temperature values (default: Celsius)
+     * @return Float representation of the value, or 0.0f for invalid/unsupported types
+     */
+    float toFloat(TemperatureUnit tempUnit = TemperatureUnit::CELSIUS) const {
+        switch (m_type) {
+            case ParameterType::BOOLEAN:
+                return getBoolean() ? 1.0f : 0.0f;
+            case ParameterType::GENERIC_INT:
+                return static_cast<float>(getGenericInt());
+            case ParameterType::TIME_MILLISECONDS:
+                return static_cast<float>(getTimeMilliseconds());
+            case ParameterType::TIME_SECONDS:
+                return static_cast<float>(getTimeSeconds());
+            case ParameterType::PERCENTAGE:
+                return getPercentage();
+            case ParameterType::TEMPERATURE:
+                return getTemperature(tempUnit);
+            case ParameterType::PRESSURE:
+                return getPressure();
+            case ParameterType::HUMIDITY:
+                return getHumidity();
+            case ParameterType::RPM:
+                return static_cast<float>(getRPM());
+            case ParameterType::FLOW_RATE:
+                return static_cast<float>(getFlowRate());
+            case ParameterType::VOLUME:
+                return getVolume();
+            case ParameterType::MASS:
+                return getMass();
+            case ParameterType::LENGTH:
+                return getLength();
+            case ParameterType::VOLTAGE:
+                return getVoltage();
+            case ParameterType::CURRENT:
+                return getCurrent();
+            case ParameterType::POWER:
+                return getPower();
+            case ParameterType::CONCENTRATION:
+                return getConcentration();
+            case ParameterType::PH_VALUE:
+                return getPH();
+            case ParameterType::VELOCITY:
+                return getVelocity();
+            case ParameterType::ANGLE:
+                return getAngle();
+            case ParameterType::ILLUMINANCE:
+                return getIlluminance();
+            case ParameterType::NONE:
+            default:
+                return 0.0f;
+        }
     }
     
     // ========================================================================
@@ -694,6 +771,13 @@ public:
                 return fromAngle(val);
             }
             
+            case ParameterType::ILLUMINANCE: {
+                char* end;
+                float val = std::strtof(valueStr.c_str(), &end);
+                if (end == valueStr.c_str()) return ParameterValue();
+                return fromIlluminance(val);
+            }
+            
             case ParameterType::NONE:
             default:
                 return ParameterValue();
@@ -714,7 +798,7 @@ public:
             "None", "Temperature", "Pressure", "Humidity", "RPM",
             "Percentage", "Time", "TimeMs", "FlowRate", "Volume",
             "Mass", "Length", "Voltage", "Current", "Power",
-            "Concentration", "pH", "Velocity", "Angle", "Boolean", "Integer"
+            "Concentration", "pH", "Velocity", "Angle", "Boolean", "Integer", "Illuminance"
         };
         return names[static_cast<uint8_t>(m_type)];
     }
@@ -820,6 +904,8 @@ public:
                 return std::to_string(getVelocity());
             case ParameterType::ANGLE:
                 return std::to_string(getAngle());
+            case ParameterType::ILLUMINANCE:
+                return std::to_string(getIlluminance());
             default:
                 return "";
         }
@@ -874,6 +960,8 @@ public:
                 return std::to_string(getVelocity()) + "mm/s";
             case ParameterType::ANGLE:
                 return std::to_string(getAngle()) + "°";
+            case ParameterType::ILLUMINANCE:
+                return std::to_string(getIlluminance()) + " lux";
             default:
                 return "";
         }

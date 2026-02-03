@@ -1,12 +1,10 @@
 #include "RecipeHistoryService.hh"
-#include <esp_log.h>
+#include "StorageManager.hh"
 #include <sstream>
 #include <iomanip>
 
-static const char* TAG = "RecipeHistoryService";
-
-RecipeHistoryService::RecipeHistoryService(IRecipeExecutionStorage* execStorage, ITimeSeriesStorage* tsStorage, TimestampProvider timestampProvider)
-    : m_execStorage(execStorage), m_tsStorage(tsStorage), m_timestampProvider(timestampProvider) {
+RecipeHistoryService::RecipeHistoryService(StorageManager* storageManager, TimestampProvider timestampProvider)
+    : m_storageManager(storageManager), m_timestampProvider(timestampProvider) {
 }
 
 RecipeHistoryService::~RecipeHistoryService() {
@@ -27,18 +25,14 @@ std::string RecipeHistoryService::startExecution(const std::string& recipeId, co
     exec.setStartTimestamp(timestamp);
     exec.setStatus(ExecutionStatus::Running);
     
-    if (!m_execStorage->save(exec)) {
-        ESP_LOGE(TAG, "Failed to save execution %s", executionId.c_str());
-    }
+    m_storageManager->saveExecution(exec);
     
-    ESP_LOGI(TAG, "Started execution %s for recipe '%s'", executionId.c_str(), recipeName.c_str());
     return executionId;
 }
 
 void RecipeHistoryService::endExecution(const std::string& executionId, ExecutionStatus status, const std::string& errorMsg) {
-    auto execOpt = m_execStorage->load(executionId);
+    auto execOpt = m_storageManager->loadExecution(executionId);
     if (!execOpt) {
-        ESP_LOGW(TAG, "Execution %s not found", executionId.c_str());
         return;
     }
     
@@ -49,47 +43,31 @@ void RecipeHistoryService::endExecution(const std::string& executionId, Executio
         exec.setErrorMessage(errorMsg);
     }
     
-    m_execStorage->save(exec);
-    ESP_LOGI(TAG, "Ended execution %s with status %d", executionId.c_str(), static_cast<int>(status));
+    m_storageManager->saveExecution(exec);
 }
 
 ExecutionHistoryDto RecipeHistoryService::getExecutionHistory() {
-    ESP_LOGI(TAG, "[GET_HISTORY] getExecutionHistory called");
-    
     ExecutionHistoryDto dto;
-    auto executions = m_execStorage->loadAll();
-    
-    ESP_LOGI(TAG, "[GET_HISTORY] Storage returned executions");
+    auto executions = m_storageManager->loadAllExecutions();
     
     dto.executions.reserve(executions.size());
     for (const auto& exec : executions) {
-        auto execDto = toDto(exec);
-        ESP_LOGI(TAG, "[GET_HISTORY] Adding execution");
-        dto.executions.push_back(execDto);
+        dto.executions.push_back(toDto(exec));
     }
     
-    ESP_LOGI(TAG, "[GET_HISTORY] Returning DTO");
     return dto;
 }
 
 RecipeExecutionDto RecipeHistoryService::getExecution(const std::string& executionId) {
-    auto execOpt = m_execStorage->load(executionId);
+    auto execOpt = m_storageManager->loadExecution(executionId);
     if (!execOpt) {
-        ESP_LOGW(TAG, "Execution %s not found", executionId.c_str());
         return RecipeExecutionDto{};
     }
     return toDto(*execOpt);
 }
 
 bool RecipeHistoryService::deleteExecution(const std::string& executionId) {
-    bool tsDeleted = m_tsStorage->deleteTimeSeries(executionId);
-    bool execDeleted = m_execStorage->deleteById(executionId);
-    
-    if (execDeleted) {
-        ESP_LOGI(TAG, "Deleted execution %s", executionId.c_str());
-    }
-    
-    return execDeleted && tsDeleted;
+    return m_storageManager->deleteExecutionCompletely(executionId);
 }
 
 RecipeExecutionDto RecipeHistoryService::toDto(const RecipeExecution& exec) {

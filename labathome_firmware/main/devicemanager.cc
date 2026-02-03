@@ -11,16 +11,17 @@
 #include "esp_vfs.h"
 #include "esp_timer.h"
 #include "modbus.hh"
+#include <sys/time.h>
 
 #include "recipemanagement/core/services/IoResourceManager.hh"
 #include "recipemanagement/infrastructure/engine/StepTypeRegistry.hh"
 #include "recipemanagement/infrastructure/engine/RecipeEngine.hh"
 #include "recipemanagement/application/services/RecipeApplicationService.hh"
 #include "recipemanagement/application/services/RecipeHistoryService.hh"
-#include "recipemanagement/application/services/TimeSeriesRecorder.hh"
+#include "recipemanagement/application/services/StorageManager.hh"
 #include "recipemanagement/infrastructure/serialization/JsonSerialization.hh"
 #include "recipemanagement/application/dtos/CommandDto.hh"
-#include "example_implementations/recipemanagement/storage/RecipeStorage_impl.cc"
+#include "example_implementations/recipemanagement/storage/StorageImplementation.cc"
 
 constexpr uint32_t TRIGGER_FALLBACK_TIME_MS{10000};
 constexpr size_t FILE_PATH_MAX =ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN;
@@ -43,19 +44,24 @@ DeviceManager::DeviceManager(iHAL *hal):hal(hal)
     IoResourceManager::instance().init(hal);
     StepTypeRegistry::instance().init();
     
-    RecipeStorageImpl* storage = new RecipeStorageImpl();
+    StorageImplementation* storage = new StorageImplementation();
     m_recipeStorage = storage;
     m_executionStorage = storage;
     m_timeSeriesStorage = storage;
     
+    m_storageManager = new StorageManager(m_recipeStorage, m_executionStorage, m_timeSeriesStorage);
     m_recipeEngine = new RecipeEngine();
-    m_historyService = new RecipeHistoryService(m_executionStorage, m_timeSeriesStorage, []() { return esp_timer_get_time() / 1000; });
-    m_timeSeriesRecorder = new TimeSeriesRecorder(m_timeSeriesStorage);
+    // RecipeHistoryService mit Unix-Timestamp-Provider (Millisekunden seit 1970)
+    m_historyService = new RecipeHistoryService(m_storageManager, []() { 
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return (uint64_t)(tv.tv_sec) * 1000ULL + (tv.tv_usec / 1000ULL);
+    });
     
-    m_recipeEngine->setTimeSeriesRecorder(m_timeSeriesRecorder);
+    m_recipeEngine->setStorageManager(m_storageManager);
     m_recipeEngine->setHistoryService(m_historyService);
     
-    m_recipeService = new RecipeApplicationService(m_recipeStorage, m_recipeEngine, nullptr, m_historyService);
+    m_recipeService = new RecipeApplicationService(m_storageManager, m_recipeEngine, nullptr, m_historyService);
     ESP_LOGI(TAG, "Recipe Management Framework initialized");
 }
 

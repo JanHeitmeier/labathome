@@ -17,7 +17,7 @@ enum class RecipeEngineState { Idle, Loaded, Running, Paused, Error };
 
 using StateChangeCallback = std::function<void()>;
 
-class TimeSeriesRecorder;
+class StorageManager;
 class RecipeHistoryService;
 
 class RecipeEngine {
@@ -25,7 +25,7 @@ public:
     RecipeEngine();
     ~RecipeEngine();
 
-    bool loadRecipe(const std::vector<StepInstanceDescriptor>& steps, const std::string& recipeId);
+    bool loadRecipe(const std::vector<StepInstanceDescriptor>& steps, const std::string& recipeId, const std::string& recipeName = "");
     bool start();
     bool pause();
     bool resume();
@@ -50,7 +50,7 @@ public:
     
     void setStateChangeCallback(StateChangeCallback callback) { m_stateChangeCallback = callback; }
     
-    void setTimeSeriesRecorder(TimeSeriesRecorder* recorder) { m_recorder = recorder; }
+    void setStorageManager(StorageManager* storageManager) { m_storageManager = storageManager; }
     void setHistoryService(RecipeHistoryService* service) { m_historyService = service; }
 
 private:
@@ -81,7 +81,7 @@ private:
         }
     }
     
-    TimeSeriesRecorder* m_recorder{nullptr};
+    StorageManager* m_storageManager{nullptr};
     RecipeHistoryService* m_historyService{nullptr};
     std::string m_currentExecutionId;
 };
