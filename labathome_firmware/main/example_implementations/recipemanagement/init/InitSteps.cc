@@ -18,6 +18,9 @@ void StepTypeRegistry::init() {
     registerStepType<LedSequenceStep>();
     registerStepType<MovementLedTriggerStep>();
     registerStepType<AcknowledgeLedFanStep>();
+    registerStepType<MultiSensorRecordingStep>();
+    registerStepType<RedLedTimedStep>();
+    registerStepType<GreenLedTimedStep>();
     
     // Steps werden nur on-demand erzeugt wenn:
     // 1. Metadaten für Web-UI angefordert werden

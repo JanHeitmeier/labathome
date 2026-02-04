@@ -125,6 +125,8 @@ bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* bu
             writer.Bool(param.required);
             writer.Key("unit");
             writer.String(param.unit.empty() ? "" : param.unit.c_str());
+            writer.Key("isGlobal");
+            writer.Bool(param.isGlobal);
             writer.EndObject();
         }
         writer.EndArray();
@@ -628,8 +630,9 @@ bool JsonSerialization::serializeToBuffer(const TimeSeriesDataDto& dto, char* bu
 }
 
 std::string JsonSerialization::serialize(const TimeSeriesDataDto& dto) {
-    // Use heap allocation for large time series data (240 points = ~11KB + overhead)
-    constexpr size_t BUFFER_SIZE = 65536;  // 64KB for time series with many points
+    // Use heap allocation for large time series data
+    // 256KB supports ~3 sensors recording at 1Hz for ~10 minutes
+    constexpr size_t BUFFER_SIZE = 262144;  // 256KB for time series with many points
     char* buffer = new (std::nothrow) char[BUFFER_SIZE];
     if (!buffer) {
         ESP_LOGE("JsonSerialization", "[SERIALIZE_TS] Failed to allocate buffer");

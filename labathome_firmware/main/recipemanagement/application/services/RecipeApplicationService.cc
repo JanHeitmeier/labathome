@@ -398,9 +398,12 @@ AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const
             paramDto.description = param.description;
             paramDto.unit = param.unit;
             paramDto.required = true;
+            paramDto.isGlobal = param.isGlobal;
             ParameterType pType = param.value.getType();
             if (pType == ParameterType::BOOLEAN) {
                 paramDto.type = "bool";
+            } else if (pType == ParameterType::COLOR) {
+                paramDto.type = "color";
             } else if (pType == ParameterType::NONE || pType == ParameterType::GENERIC_INT || 
                        pType == ParameterType::RPM || pType == ParameterType::TIME_SECONDS || 
                        pType == ParameterType::TIME_MILLISECONDS || pType == ParameterType::FLOW_RATE) {

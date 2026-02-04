@@ -12,6 +12,7 @@ class FanRampStep : public StepBase
 {
 private:
     IoAliasDef fanOutput;
+    IoAliasDef fanDutySensor;
     ParamDef startDutyParam;
     ParamDef endDutyParam;
     ParamDef durationParam;
@@ -21,6 +22,7 @@ public:
     FanRampStep()
         : StepBase("FanRamp", "Ramp fan speed from start to end value over time", "1.0"),
           fanOutput("Fan", false, true, false, "float", std::nullopt, "Fan"),
+          fanDutySensor("FanDutySensor", true, false, true, "float", std::nullopt, "FanDutySensor"),
           startDutyParam("startDuty", 
                         ParameterValue::fromPercentage(0.0f),
                         "Start Duty",
@@ -36,27 +38,28 @@ public:
                       ParameterValue::fromPercentage(0.0f),
                       ParameterValue::fromPercentage(100.0f)),
           durationParam("duration", 
-                       ParameterValue::fromTimeSeconds(10),
+                       ParameterValue::fromTimeMilliseconds(10000),
                        "Duration",
                        "Ramp duration",
-                       "s",
-                       ParameterValue::fromTimeSeconds(1),
-                       ParameterValue::fromTimeSeconds(300)),
+                       "ms",
+                       ParameterValue::fromTimeMilliseconds(1000),
+                       ParameterValue::fromTimeMilliseconds(300000)),
           startTime(0)
     {
-        registerIoAliases({&fanOutput});
+        registerIoAliases({&fanOutput, &fanDutySensor});
         registerParamDefs({&startDutyParam, &endDutyParam, &durationParam});
     }
 
     FanRampStep(const FanRampStep &o)
         : StepBase(o),
           fanOutput(o.fanOutput),
+          fanDutySensor(o.fanDutySensor),
           startDutyParam(o.startDutyParam),
           endDutyParam(o.endDutyParam),
           durationParam(o.durationParam),
           startTime(0)
     {
-        registerIoAliases({&fanOutput});
+        registerIoAliases({&fanOutput, &fanDutySensor});
         registerParamDefs({&startDutyParam, &endDutyParam, &durationParam});
     }
 
@@ -158,10 +161,10 @@ public:
           led1("LED1", false, true, false, "uint32_t", std::nullopt, "LED1"),
           led2("LED2", false, true, false, "uint32_t", std::nullopt, "LED2"),
           led3("LED3", false, true, false, "uint32_t", std::nullopt, "LED3"),
-          color0("color0", ParameterValue::fromGenericInt(0xFF0000FF), "Color LED0", "Color for first LED (RGBA)", "RGBA"),
-          color1("color1", ParameterValue::fromGenericInt(0x00FF00FF), "Color LED1", "Color for second LED (RGBA)", "RGBA"),
-          color2("color2", ParameterValue::fromGenericInt(0x0000FFFF), "Color LED2", "Color for third LED (RGBA)", "RGBA"),
-          color3("color3", ParameterValue::fromGenericInt(0xFFFF00FF), "Color LED3", "Color for fourth LED (RGBA)", "RGBA"),
+          color0("color0", ParameterValue::fromColor(0xFF0000FF), "Color LED0", "Color for first LED (RGBA)", "RGBA"),
+          color1("color1", ParameterValue::fromColor(0x00FF00FF), "Color LED1", "Color for second LED (RGBA)", "RGBA"),
+          color2("color2", ParameterValue::fromColor(0x0000FFFF), "Color LED2", "Color for third LED (RGBA)", "RGBA"),
+          color3("color3", ParameterValue::fromColor(0xFFFF00FF), "Color LED3", "Color for fourth LED (RGBA)", "RGBA"),
           time0("time0", ParameterValue::fromTimeMilliseconds(500), "Time LED0", "Duration for first LED", "ms",
                 ParameterValue::fromTimeMilliseconds(100), ParameterValue::fromTimeMilliseconds(10000)),
           time1("time1", ParameterValue::fromTimeMilliseconds(500), "Time LED1", "Duration for second LED", "ms",
@@ -266,7 +269,7 @@ private:
         auto led = ctx.getOutput(ledDef->aliasName);
         if (led) {
             uint32_t color = readParamOrDefault(*colorDef, uint32_t(0xFFFFFFFF));
-            led->write(ParameterValue::fromGenericInt(color));
+            led->write(ParameterValue::fromColor(color));
         }
         
         uint32_t timeMs = readParamOrDefault(*timeDef, uint32_t(500));
@@ -287,45 +290,35 @@ private:
         
         auto led = ctx.getOutput(ledDef->aliasName);
         if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
+            led->write(ParameterValue::fromColor(0x00000000));
         }
     }
 };
 
 // ==================== Test Step 3: Movement LED Trigger ====================
-// Bei Movement-Erkennung wird eine LED für eine konfigurierbare Zeit eingeschaltet
+// LED folgt dem Movement Sensor - an bei true, aus bei false. Step endet durch Acknowledge.
 class MovementLedTriggerStep : public StepBase
 {
 private:
     IoAliasDef movementInput;
     IoAliasDef ledOutput;
     ParamDef ledColorParam;
-    ParamDef durationParam;
-    bool movementDetected;
-    bool ledActive;
+    bool lastMovementState;
 
 public:
     MovementLedTriggerStep()
-        : StepBase("MovementLedTrigger", "Turns on LED when movement detected for configured time", "1.0"),
+        : StepBase("MovementLedTrigger", "LED follows movement sensor, ends on user acknowledgement", "1.0"),
           movementInput("Movement", true, false, true, "bool", std::nullopt, "Movement"),
           ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
           ledColorParam("ledColor", 
-                       ParameterValue::fromGenericInt(0xFF00FFFF),
+                       ParameterValue::fromColor(0xFF00FFFF),
                        "LED Color",
                        "Color to display when movement detected (RGBA)",
                        "RGBA"),
-          durationParam("duration", 
-                       ParameterValue::fromTimeMilliseconds(2000),
-                       "Duration",
-                       "How long LED stays on after movement",
-                       "ms",
-                       ParameterValue::fromTimeMilliseconds(100),
-                       ParameterValue::fromTimeMilliseconds(30000)),
-          movementDetected(false),
-          ledActive(false)
+          lastMovementState(false)
     {
         registerIoAliases({&movementInput, &ledOutput});
-        registerParamDefs({&ledColorParam, &durationParam});
+        registerParamDefs({&ledColorParam});
     }
 
     MovementLedTriggerStep(const MovementLedTriggerStep &o)
@@ -333,68 +326,58 @@ public:
           movementInput(o.movementInput),
           ledOutput(o.ledOutput),
           ledColorParam(o.ledColorParam),
-          durationParam(o.durationParam),
-          movementDetected(false),
-          ledActive(false)
+          lastMovementState(false)
     {
         registerIoAliases({&movementInput, &ledOutput});
-        registerParamDefs({&ledColorParam, &durationParam});
+        registerParamDefs({&ledColorParam});
     }
 
     void initialize() override
     {
         setState(State::Inactive);
-        movementDetected = false;
-        ledActive = false;
+        lastMovementState = false;
     }
 
     void onActivating(StepContext &ctx) override
     {
-        movementDetected = false;
-        ledActive = false;
-        ctx.startTimer("stepTimer", std::chrono::seconds(60));
-        setState(State::Activating);
+        lastMovementState = false;
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromColor(0x00000000));
+        }
+        ctx.requestUserAcknowledgment("Press acknowledge to end movement monitoring");
+        setState(State::Active);
     }
 
     void onActive(StepContext &ctx) override
     {
-        if (state() == State::Activating)
+        // Ständig Movement Sensor auslesen
+        auto movement = ctx.getInput(movementInput.aliasName);
+        if (movement)
         {
-            setState(State::Active);
-        }
-        else if (state() == State::Active)
-        {
-            auto movement = ctx.getInput(movementInput.aliasName);
-            if (movement)
-            {
-                auto val = movement->read();
-                if (val.isType(ParameterType::BOOLEAN) && val.getBoolean())
-                {
-                    if (!movementDetected)
-                    {
-                        movementDetected = true;
-                        ledActive = true;
-                        
-                        uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFF00FFFF));
-                        auto led = ctx.getOutput(ledOutput.aliasName);
-                        if (led) {
-                            led->write(ParameterValue::fromGenericInt(color));
-                        }
-                        
-                        uint32_t durationMs = readParamOrDefault(durationParam, uint32_t(2000));
-                        ctx.startTimer("ledTimer", std::chrono::milliseconds(durationMs));
-                    }
-                }
+            auto val = movement->read();
+            bool currentMovement = false;
+            
+            if (val.isType(ParameterType::BOOLEAN)) {
+                currentMovement = val.getBoolean();
             }
             
-            if (ledActive && ctx.isTimerExpired("ledTimer"))
+            // LED entsprechend Movement State setzen
+            if (currentMovement != lastMovementState)
             {
-                ctx.stopTimer("ledTimer");
+                lastMovementState = currentMovement;
                 auto led = ctx.getOutput(ledOutput.aliasName);
+                
                 if (led) {
-                    led->write(ParameterValue::fromGenericInt(0x00000000));
+                    if (currentMovement) {
+                        // Movement detected - LED an
+                        uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFF00FFFF));
+                        led->write(ParameterValue::fromColor(color));
+                    } else {
+                        // No movement - LED aus
+                        led->write(ParameterValue::fromColor(0x00000000));
+                    }
                 }
-                ledActive = false;
             }
         }
     }
@@ -403,7 +386,7 @@ public:
     {
         auto led = ctx.getOutput(ledOutput.aliasName);
         if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
+            led->write(ParameterValue::fromColor(0x00000000));
         }
         setState(State::Deactivated);
     }
@@ -414,28 +397,34 @@ public:
     {
         auto led = ctx.getOutput(ledOutput.aliasName);
         if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
+            led->write(ParameterValue::fromColor(0x00000000));
         }
     }
 
     void onResumeImpl(StepContext &ctx) override
     {
-        if (wasPaused() && ledActive) {
-            uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFF00FFFF));
-            auto led = ctx.getOutput(ledOutput.aliasName);
-            if (led) {
-                led->write(ParameterValue::fromGenericInt(color));
+        if (wasPaused()) {
+            // Nach Resume LED State gemäß aktuellem Movement Sensor setzen
+            auto movement = ctx.getInput(movementInput.aliasName);
+            if (movement) {
+                auto val = movement->read();
+                if (val.isType(ParameterType::BOOLEAN) && val.getBoolean()) {
+                    uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFF00FFFF));
+                    auto led = ctx.getOutput(ledOutput.aliasName);
+                    if (led) {
+                        led->write(ParameterValue::fromColor(color));
+                    }
+                    lastMovementState = true;
+                } else {
+                    lastMovementState = false;
+                }
             }
         }
     }
 
     bool isTransitionConditionMet(StepContext &ctx) override
     {
-        if (state() == State::Active)
-        {
-            return ctx.isTimerExpired("stepTimer");
-        }
-        return false;
+        return state() == State::Active && ctx.isAcknowledged();
     }
 };
 
@@ -457,7 +446,7 @@ public:
           ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
           fanOutput("Fan", false, true, false, "float", std::nullopt, "Fan"),
           ledColorParam("ledColor", 
-                       ParameterValue::fromGenericInt(0xFFFFFFFF),
+                       ParameterValue::fromColor(0xFFFFFFFF),
                        "LED Color",
                        "Color while waiting for acknowledgement (RGBA)",
                        "RGBA"),
@@ -507,7 +496,7 @@ public:
         uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFFFFFFFF));
         auto led = ctx.getOutput(ledOutput.aliasName);
         if (led) {
-            led->write(ParameterValue::fromGenericInt(color));
+            led->write(ParameterValue::fromColor(color));
         }
         
         ctx.requestUserAcknowledgment("Please confirm to proceed with fan operation");
@@ -524,7 +513,7 @@ public:
                 
                 auto led = ctx.getOutput(ledOutput.aliasName);
                 if (led) {
-                    led->write(ParameterValue::fromGenericInt(0x00000000));
+                    led->write(ParameterValue::fromColor(0x00000000));
                 }
                 
                 float fanIntensity = readParamOrDefault(fanIntensityParam, 75.0f);
@@ -544,7 +533,7 @@ public:
     {
         auto led = ctx.getOutput(ledOutput.aliasName);
         if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
+            led->write(ParameterValue::fromColor(0x00000000));
         }
         
         auto fan = ctx.getOutput(fanOutput.aliasName);
@@ -561,7 +550,7 @@ public:
     {
         auto led = ctx.getOutput(ledOutput.aliasName);
         if (led) {
-            led->write(ParameterValue::fromGenericInt(0x00000000));
+            led->write(ParameterValue::fromColor(0x00000000));
         }
         
         auto fan = ctx.getOutput(fanOutput.aliasName);
@@ -578,7 +567,7 @@ public:
                 uint32_t color = readParamOrDefault(ledColorParam, uint32_t(0xFFFFFFFF));
                 auto led = ctx.getOutput(ledOutput.aliasName);
                 if (led) {
-                    led->write(ParameterValue::fromGenericInt(color));
+                    led->write(ParameterValue::fromColor(color));
                 }
             } else {
                 float fanIntensity = readParamOrDefault(fanIntensityParam, 75.0f);
@@ -599,6 +588,276 @@ public:
                 ctx.stopTimer("fanTimer");
             }
             return timerDone;
+        }
+        return false;
+    }
+};
+
+// ==================== Test Step 5: Multi-Sensor Recording ====================
+// Zeichnet RedButton, GreenButton und Movement gleichzeitig auf - für Analytics-Tests
+class MultiSensorRecordingStep : public StepBase
+{
+private:
+    IoAliasDef redButtonInput;
+    IoAliasDef greenButtonInput;
+    IoAliasDef movementInput;
+
+public:
+    MultiSensorRecordingStep()
+        : StepBase("MultiSensorRecording", "Records RedButton, GreenButton and Movement sensors for analytics testing", "1.0"),
+          redButtonInput("RedButton", true, false, true, "bool", std::nullopt, "RedButton"),
+          greenButtonInput("GreenButton", true, false, true, "bool", std::nullopt, "GreenButton"),
+          movementInput("Movement", true, false, true, "bool", std::nullopt, "Movement")
+    {
+        registerIoAliases({&redButtonInput, &greenButtonInput, &movementInput});
+    }
+
+    MultiSensorRecordingStep(const MultiSensorRecordingStep &o)
+        : StepBase(o),
+          redButtonInput(o.redButtonInput),
+          greenButtonInput(o.greenButtonInput),
+          movementInput(o.movementInput)
+    {
+        registerIoAliases({&redButtonInput, &greenButtonInput, &movementInput});
+    }
+
+    void initialize() override
+    {
+        setState(State::Inactive);
+    }
+
+    void onActivating(StepContext &ctx) override
+    {
+        ctx.requestUserAcknowledgment("Recording sensors: RedButton, GreenButton, Movement. Press acknowledge to stop recording.");
+        setState(State::Active);
+    }
+
+    void onActive(StepContext &ctx) override
+    {
+        // Sensoren werden automatisch durch das System aufgezeichnet (isSensor=true)
+        // Nichts zu tun hier, warten auf Acknowledge
+    }
+
+    void onDeactivating(StepContext &ctx) override
+    {
+        setState(State::Deactivated);
+    }
+
+    void onDeactivated(StepContext & /*ctx*/) override {}
+
+    void onPauseImpl(StepContext &ctx) override
+    {
+        // Beim Pause nichts zu tun
+    }
+
+    void onResumeImpl(StepContext &ctx) override
+    {
+        // Beim Resume nichts zu tun
+    }
+
+    bool isTransitionConditionMet(StepContext &ctx) override
+    {
+        return state() == State::Active && ctx.isAcknowledged();
+    }
+};
+
+// ==================== Test Step 6: Red LED Timed ====================
+// Schaltet rote LED für globale Dauer an
+class RedLedTimedStep : public StepBase
+{
+private:
+    IoAliasDef ledOutput;
+    ParamDef ledDurationParam;
+    uint32_t startTime;
+
+public:
+    RedLedTimedStep()
+        : StepBase("RedLedTimed", "Turn on red LED for configured duration", "1.0"),
+          ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
+          ledDurationParam("ledDuration",
+                          ParameterValue::fromTimeMilliseconds(2000),
+                          "LED Duration",
+                          "How long the LED stays on (global parameter)",
+                          "ms",
+                          ParameterValue::fromTimeMilliseconds(100),
+                          ParameterValue::fromTimeMilliseconds(60000),
+                          true), // isGlobal = true
+          startTime(0)
+    {
+        registerIoAliases({&ledOutput});
+        registerParamDefs({&ledDurationParam});
+    }
+
+    RedLedTimedStep(const RedLedTimedStep &o)
+        : StepBase(o),
+          ledOutput(o.ledOutput),
+          ledDurationParam(o.ledDurationParam),
+          startTime(0)
+    {
+        registerIoAliases({&ledOutput});
+        registerParamDefs({&ledDurationParam});
+    }
+
+    void initialize() override
+    {
+        setState(State::Inactive);
+        startTime = 0;
+    }
+
+    void onActivating(StepContext &ctx) override
+    {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromColor(0xFF0000FF)); // Rot (RGBA)
+        }
+        startTime = esp_log_timestamp();
+        setState(State::Active);
+    }
+
+    void onActive(StepContext &ctx) override
+    {
+        // Einfach warten bis Zeit abgelaufen ist
+    }
+
+    void onDeactivating(StepContext &ctx) override
+    {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromColor(0x00000000)); // Aus
+        }
+        setState(State::Deactivated);
+    }
+
+    void onDeactivated(StepContext & /*ctx*/) override {}
+
+    void onPauseImpl(StepContext &ctx) override
+    {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromColor(0x00000000));
+        }
+    }
+
+    void onResumeImpl(StepContext &ctx) override
+    {
+        if (wasPaused() && state() == State::Active) {
+            auto led = ctx.getOutput(ledOutput.aliasName);
+            if (led) {
+                led->write(ParameterValue::fromColor(0xFF0000FF));
+            }
+            startTime = esp_log_timestamp(); // Reset timer on resume
+        }
+    }
+
+    bool isTransitionConditionMet(StepContext &ctx) override
+    {
+        if (state() == State::Active)
+        {
+            uint32_t now = esp_log_timestamp();
+            uint32_t elapsed = now - startTime;
+            uint32_t durationMs = readParamOrDefault(ledDurationParam, uint32_t(2000));
+            return elapsed >= durationMs;
+        }
+        return false;
+    }
+};
+
+// ==================== Test Step 7: Green LED Timed ====================
+// Schaltet grüne LED für globale Dauer an
+class GreenLedTimedStep : public StepBase
+{
+private:
+    IoAliasDef ledOutput;
+    ParamDef ledDurationParam;
+    uint32_t startTime;
+
+public:
+    GreenLedTimedStep()
+        : StepBase("GreenLedTimed", "Turn on green LED for configured duration", "1.0"),
+          ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED1"),
+          ledDurationParam("ledDuration",
+                          ParameterValue::fromTimeMilliseconds(2000),
+                          "LED Duration",
+                          "How long the LED stays on (global parameter)",
+                          "ms",
+                          ParameterValue::fromTimeMilliseconds(100),
+                          ParameterValue::fromTimeMilliseconds(60000),
+                          true), // isGlobal = true (gleicher Name wie RedLedTimedStep!)
+          startTime(0)
+    {
+        registerIoAliases({&ledOutput});
+        registerParamDefs({&ledDurationParam});
+    }
+
+    GreenLedTimedStep(const GreenLedTimedStep &o)
+        : StepBase(o),
+          ledOutput(o.ledOutput),
+          ledDurationParam(o.ledDurationParam),
+          startTime(0)
+    {
+        registerIoAliases({&ledOutput});
+        registerParamDefs({&ledDurationParam});
+    }
+
+    void initialize() override
+    {
+        setState(State::Inactive);
+        startTime = 0;
+    }
+
+    void onActivating(StepContext &ctx) override
+    {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromColor(0x00FF00FF)); // Grün (RGBA)
+        }
+        startTime = esp_log_timestamp();
+        setState(State::Active);
+    }
+
+    void onActive(StepContext &ctx) override
+    {
+        // Einfach warten bis Zeit abgelaufen ist
+    }
+
+    void onDeactivating(StepContext &ctx) override
+    {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromGenericInt(0x00000000)); // Aus
+        }
+        setState(State::Deactivated);
+    }
+
+    void onDeactivated(StepContext & /*ctx*/) override {}
+
+    void onPauseImpl(StepContext &ctx) override
+    {
+        auto led = ctx.getOutput(ledOutput.aliasName);
+        if (led) {
+            led->write(ParameterValue::fromColor(0x00000000));
+        }
+    }
+
+    void onResumeImpl(StepContext &ctx) override
+    {
+        if (wasPaused() && state() == State::Active) {
+            auto led = ctx.getOutput(ledOutput.aliasName);
+            if (led) {
+                led->write(ParameterValue::fromColor(0x00FF00FF));
+            }
+            startTime = esp_log_timestamp(); // Reset timer on resume
+        }
+    }
+
+    bool isTransitionConditionMet(StepContext &ctx) override
+    {
+        if (state() == State::Active)
+        {
+            uint32_t now = esp_log_timestamp();
+            uint32_t elapsed = now - startTime;
+            uint32_t durationMs = readParamOrDefault(ledDurationParam, uint32_t(2000));
+            return elapsed >= durationMs;
         }
         return false;
     }

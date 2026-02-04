@@ -15,6 +15,7 @@ struct ParamDef {
     std::string label;
     std::string description;
     std::string unit; // z.B. "°C", "RPM", "ms"
+    bool isGlobal{false}; // Rezeptweiter Parameter (z.B. Batch-Größe)
 
     // Konstruktor für einfache Initialisierung (akzeptiert string_view für Flexibilität)
     explicit ParamDef(std::string_view key,
@@ -23,14 +24,16 @@ struct ParamDef {
                       std::string_view description,
                       std::string unit = "",
                       std::optional<ParameterValue> minValue = std::nullopt,
-                      std::optional<ParameterValue> maxValue = std::nullopt)
+                      std::optional<ParameterValue> maxValue = std::nullopt,
+                      bool isGlobal = false)
         : key(key), 
           value(std::move(value)), 
           minValue(std::move(minValue)),
           maxValue(std::move(maxValue)), 
           label(label), 
           description(description),
-          unit(std::move(unit)) {}
+          unit(std::move(unit)),
+          isGlobal(isGlobal) {}
 
     // Standard-Kopier- und Move-Operationen sind ausreichend
     ParamDef(const ParamDef&) = default;

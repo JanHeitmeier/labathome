@@ -75,25 +75,29 @@ private:
 };
 
 
-class BrightnessInput : public IInput {
+class FanDutySensorInput : public IInput {
 public:
-    explicit BrightnessInput(iHAL* hal) noexcept
-        : hal_(hal) {}
+    explicit FanDutySensorInput(iHAL* hal, uint8_t fanIndex, const char* name = "FanDutySensor") noexcept
+        : hal_(hal), index_(fanIndex), name_(name) {}
 
-    ~BrightnessInput() override = default;
+    ~FanDutySensorInput() override = default;
 
     const char* name() const noexcept override {
-        return "BrightnessSensor";
+        return name_;
     }
 
     ParameterValue read() const override {
-        float lux = 0.0f;
-        if (hal_) hal_->GetAmbientBrightness(&lux);
-        return ParameterValue::fromIlluminance(lux);
+        float duty = 0.0f;
+        if (hal_) {
+            hal_->GetFanDuty(index_, &duty);
+        }
+        return ParameterValue::fromPercentage(duty);
     }
 
 private:
     iHAL* hal_;
+    uint8_t index_;
+    const char* name_;
 };
 
 
@@ -154,7 +158,9 @@ public:
 
         uint32_t color = 0;
         
-        if (v.isType(ParameterType::GENERIC_INT)) {
+        if (v.isType(ParameterType::COLOR)) {
+            color = v.getColor();
+        } else if (v.isType(ParameterType::GENERIC_INT)) {
             color = static_cast<uint32_t>(v.getGenericInt());
         } else if (v.isType(ParameterType::BOOLEAN)) {
             color = v.getBoolean() ? 0xFFFFFF : 0x000000;

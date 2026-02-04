@@ -12,6 +12,7 @@ struct ParameterMetadataDto {
     std::string maxValue;
     bool required;
     std::string unit;
+    bool isGlobal{false};
 };
 
 struct IoAliasMetadataDto {

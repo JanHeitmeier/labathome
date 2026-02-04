@@ -36,6 +36,7 @@ enum class ParameterType : uint8_t {
     ANGLE,              // Degrees * 10 (900 = 90.0°, range 0-3600)
     BOOLEAN,            // bool (0 or 1)
     GENERIC_INT,        // Generic integer value
+    COLOR,              // RGBA color (0xRRGGBBAA as uint32_t, displayed as hex string)
     ILLUMINANCE         // Lux (illuminance in lux, range 0-100000)
 };
 
@@ -370,6 +371,39 @@ public:
         return pv;
     }
     
+    static ParameterValue fromColor(uint32_t rgbaValue) {
+        ParameterValue pv;
+        pv.m_type = ParameterType::COLOR;
+        pv.m_rawValue = rgbaValue;
+        return pv;
+    }
+    
+    static ParameterValue fromHexColor(const char* hexString) {
+        // Parse hex string like "FF0000FF" or "#FF0000FF" to RGBA
+        uint32_t color = 0;
+        const char* str = hexString;
+        
+        // Skip '#' if present
+        if (str[0] == '#') {
+            str++;
+        }
+        
+        // Parse hex digits
+        for (int i = 0; i < 8 && str[i] != '\0'; i++) {
+            color <<= 4;
+            char c = str[i];
+            if (c >= '0' && c <= '9') {
+                color |= (c - '0');
+            } else if (c >= 'A' && c <= 'F') {
+                color |= (c - 'A' + 10);
+            } else if (c >= 'a' && c <= 'f') {
+                color |= (c - 'a' + 10);
+            }
+        }
+        
+        return fromColor(color);
+    }
+    
     static ParameterValue fromTimeMilliseconds(uint32_t milliseconds) {
         ParameterValue pv;
         pv.m_type = ParameterType::TIME_MILLISECONDS;
@@ -552,6 +586,22 @@ public:
         return (m_type == ParameterType::ILLUMINANCE) ? static_cast<float>(m_rawValue) : 0.0f;
     }
     
+    // Get color as hex string (for web UI)
+    std::string toHexColor() const {
+        if (m_type != ParameterType::COLOR) {
+            return "00000000";
+        }
+        
+        char buffer[9];
+        snprintf(buffer, sizeof(buffer), "%08X", (unsigned int)m_rawValue);
+        return std::string(buffer);
+    }
+    
+    // Get raw color value (RGBA)
+    uint32_t getColor() const {
+        return (m_type == ParameterType::COLOR) ? m_rawValue : 0;
+    }
+    
     // ========================================================================
     // UNIVERSAL FLOAT CONVERSION
     // ========================================================================
@@ -571,6 +621,8 @@ public:
                 return getBoolean() ? 1.0f : 0.0f;
             case ParameterType::GENERIC_INT:
                 return static_cast<float>(getGenericInt());
+            case ParameterType::COLOR:
+                return static_cast<float>(m_rawValue);
             case ParameterType::TIME_MILLISECONDS:
                 return static_cast<float>(getTimeMilliseconds());
             case ParameterType::TIME_SECONDS:
@@ -671,6 +723,10 @@ public:
                 long val = std::strtol(valueStr.c_str(), &end, 10);
                 if (end == valueStr.c_str()) return ParameterValue();
                 return fromGenericInt(static_cast<int32_t>(val));
+            }
+            
+            case ParameterType::COLOR: {
+                return fromHexColor(valueStr.c_str());
             }
             
             case ParameterType::TEMPERATURE: {
@@ -882,6 +938,8 @@ public:
                 return std::to_string(getFlowRate());
             case ParameterType::GENERIC_INT:
                 return std::to_string(getGenericInt());
+            case ParameterType::COLOR:
+                return toHexColor();
             case ParameterType::TIME_MILLISECONDS:
                 return std::to_string(getTimeMilliseconds());
             case ParameterType::VOLUME:
@@ -938,6 +996,8 @@ public:
                 return std::to_string(getFlowRate()) + " ml/min";
             case ParameterType::GENERIC_INT:
                 return std::to_string(getGenericInt());
+            case ParameterType::COLOR:
+                return toHexColor();
             case ParameterType::TIME_MILLISECONDS:
                 return std::to_string(getTimeMilliseconds()) + "ms";
             case ParameterType::VOLUME:
