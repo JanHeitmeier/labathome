@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <map>
 
 struct RecipeExecutionDto {
     std::string executionId;
@@ -11,4 +12,5 @@ struct RecipeExecutionDto {
     uint64_t duration;
     std::string status;
     std::string errorMessage;
+    std::map<std::string, std::string> globalParameters;
 };

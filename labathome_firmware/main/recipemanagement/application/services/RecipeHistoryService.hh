@@ -16,7 +16,7 @@ public:
     RecipeHistoryService(StorageManager* storageManager, TimestampProvider timestampProvider);
     ~RecipeHistoryService();
     
-    std::string startExecution(const std::string& recipeId, const std::string& recipeName);
+    std::string startExecution(const std::string& recipeId, const std::string& recipeName, const std::map<std::string, std::string>& globalParams = {});
     void endExecution(const std::string& executionId, ExecutionStatus status, const std::string& errorMsg = "");
     
     ExecutionHistoryDto getExecutionHistory();

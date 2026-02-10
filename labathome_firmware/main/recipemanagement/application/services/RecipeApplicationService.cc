@@ -13,10 +13,12 @@ RecipeApplicationService::RecipeApplicationService(
     StorageManager *storageManager,
     RecipeEngine *engine,
     IMessageGateway *gateway,
-    RecipeHistoryService* historyService) : m_storageManager(storageManager),
+    RecipeHistoryService* historyService,
+    AuthenticationManager* authManager) : m_storageManager(storageManager),
                                 m_engine(engine),
                                 m_gateway(gateway),
-                                m_historyService(historyService)
+                                m_historyService(historyService),
+                                m_authManager(authManager)
 {
     if (m_engine)
     {
@@ -45,39 +47,72 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
 {
     const std::string &cmd = dto.command;
     
+    // Commands requiring RecipeStarter role
     if (cmd == "start_recipe")
     {
-        if (!dto.payload.empty())
-        {
-            ESP_LOGI(TAG, "Called handleStartRecipeFromJson()");
-            handleStartRecipeFromJson(dto.payload);
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Called handleStartRecipe()");
-            handleStartRecipe(dto.recipeId);
-        }
+        ESP_LOGI(TAG, "Called start_recipe: payload.len=%d, recipeId=%s", 
+                 dto.payload.length(), dto.recipeId.c_str());
+        validateAndExecute(dto, UserRole::RecipeStarter, [&]() {
+            if (!dto.payload.empty()) {
+                ESP_LOGI(TAG, "-> Using handleStartRecipeFromJson (with payload)");
+                handleStartRecipeFromJson(dto.payload);
+            } else {
+                ESP_LOGI(TAG, "-> Using handleStartRecipe (by ID)");
+                handleStartRecipe(dto.recipeId);
+            }
+        });
     }
     else if (cmd == "stop_recipe")
     {
         ESP_LOGI(TAG, "Called handleStopRecipe()");
-        handleStopRecipe();
+        validateAndExecute(dto, UserRole::RecipeStarter, [&]() {
+            handleStopRecipe();
+        });
     }
     else if (cmd == "pause_recipe")
     {
         ESP_LOGI(TAG, "Called handlePauseRecipe()");
-        handlePauseRecipe();
+        validateAndExecute(dto, UserRole::RecipeStarter, [&]() {
+            handlePauseRecipe();
+        });
     }
     else if (cmd == "resume_recipe")
     {
         ESP_LOGI(TAG, "Called handleResumeRecipe()");
-        handleResumeRecipe();
+        validateAndExecute(dto, UserRole::RecipeStarter, [&]() {
+            handleResumeRecipe();
+        });
     }
     else if (cmd == "acknowledge_step")
     {
         ESP_LOGI(TAG, "Called handleAcknowledgeStep()");
-        handleAcknowledgeStep();
+        validateAndExecute(dto, UserRole::RecipeStarter, [&]() {
+            handleAcknowledgeStep();
+        });
     }
+    // Commands requiring RecipeEditor role
+    else if (cmd == "save_recipe")
+    {
+        ESP_LOGI(TAG, "Called handleSaveRecipe()");
+        validateAndExecute(dto, UserRole::RecipeEditor, [&]() {
+            handleSaveRecipe(dto.payload);
+        });
+    }
+    else if (cmd == "delete_recipe")
+    {
+        ESP_LOGI(TAG, "Called handleDeleteRecipe()");
+        validateAndExecute(dto, UserRole::RecipeEditor, [&]() {
+            handleDeleteRecipe(dto.recipeId);
+        });
+    }
+    else if (cmd == "delete_execution")
+    {
+        ESP_LOGI(TAG, "Called handleDeleteExecution(%s)", dto.executionId.c_str());
+        validateAndExecute(dto, UserRole::RecipeEditor, [&]() {
+            handleDeleteExecution(dto.executionId);
+        });
+    }
+    // Observer commands (no authentication required)
     else if (cmd == "get_recipe_list")
     {
         ESP_LOGI(TAG, "Called handleGetRecipeList()");
@@ -87,16 +122,6 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
     {
         ESP_LOGI(TAG, "Called handleGetAvailableSteps()");
         handleGetAvailableSteps();
-    }
-    else if (cmd == "save_recipe")
-    {
-        ESP_LOGI(TAG, "Called handleSaveRecipe()");
-        handleSaveRecipe(dto.payload);
-    }
-    else if (cmd == "delete_recipe")
-    {
-        ESP_LOGI(TAG, "Called handleDeleteRecipe()");
-        handleDeleteRecipe(dto.recipeId);
     }
     else if (cmd == "get_recipe")
     {
@@ -118,59 +143,122 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
         ESP_LOGI(TAG, "Called handleGetTimeSeries(%s)", dto.executionId.c_str());
         handleGetTimeSeries(dto.executionId);
     }
-    else if (cmd == "delete_execution")
+    // Authentication commands
+    else if (cmd == "authenticate")
     {
-        ESP_LOGI(TAG, "Called handleDeleteExecution(%s)", dto.executionId.c_str());
-        handleDeleteExecution(dto.executionId);
+        ESP_LOGI(TAG, "Called handleAuthenticate()");
+        handleAuthenticate(dto);
+    }
+    else if (cmd == "change_password")
+    {
+        ESP_LOGI(TAG, "Called handleChangePassword()");
+        handleChangePassword(dto.payload);
+    }
+    else if (cmd == "reset_passwords")
+    {
+        ESP_LOGI(TAG, "Called handleResetPasswords()");
+        validateAndExecute(dto, UserRole::Admin, [&]() {
+            handleResetPasswords(dto.password);
+        });
     }
 }
 void RecipeApplicationService::handleStartRecipeFromJson(const std::string &jsonRecipe)
 {
+    ESP_LOGI(TAG, "[START_FROM_JSON] Starting... (JSON length=%d)", jsonRecipe.length());
+    ESP_LOGI(TAG, "[START_FROM_JSON] JSON snippet: %.200s", jsonRecipe.c_str());
     if (!m_engine || !m_storageManager)
     {
+        ESP_LOGE(TAG, "[START_FROM_JSON] Failed: engine=%p storage=%p", m_engine, m_storageManager);
         return;
     }
     RecipeParser parser;
     Recipe recipe;
     if (!parser.parseJsonToRecipe(jsonRecipe, recipe))
     {
+        ESP_LOGE(TAG, "[START_FROM_JSON] Failed to parse JSON to Recipe");
         return;
     }
+    ESP_LOGI(TAG, "[START_FROM_JSON] Recipe parsed: id=%s, name=%s", recipe.id().c_str(), recipe.name().c_str());
+    
+    std::map<std::string, std::string> globalParams;
+    if (!JsonSerialization::extractGlobalParameters(jsonRecipe, globalParams)) {
+        ESP_LOGW(TAG, "[START_FROM_JSON] Failed to extract globalParameters");
+    } else {
+        ESP_LOGI(TAG, "[START_FROM_JSON] Extracted %d global parameters", globalParams.size());
+    }
+    
     uint32_t recipeIdHash = calculateRecipeIdHash(recipe.id());
     m_storageManager->saveRecipeWithCache(recipeIdHash, jsonRecipe, recipe);
+    ESP_LOGI(TAG, "[START_FROM_JSON] Recipe saved to storage");
+    
     if (!m_engine->loadRecipe(recipe.steps(), recipe.id(), recipe.name()))
     {
+        ESP_LOGE(TAG, "[START_FROM_JSON] Engine failed to load recipe");
         return;
     }
+    ESP_LOGI(TAG, "[START_FROM_JSON] Recipe loaded into engine");
+    
+    m_engine->setGlobalParameters(globalParams);
+    ESP_LOGI(TAG, "[START_FROM_JSON] Global parameters set");
+    
     if (!m_engine->start())
     {
+        ESP_LOGE(TAG, "[START_FROM_JSON] Engine failed to start");
         return;
     }
+    ESP_LOGI(TAG, "[START_FROM_JSON] Recipe started successfully!");
     sendLiveViewUpdate();
 }
 void RecipeApplicationService::handleStartRecipe(const std::string &recipeId)
 {
+    ESP_LOGI(TAG, "[START_RECIPE] Starting recipe: %s", recipeId.c_str());
     if (!m_storageManager || !m_engine)
     {
+        ESP_LOGE(TAG, "[START_RECIPE] Failed: engine=%p storage=%p", m_engine, m_storageManager);
         return;
     }
 
     uint32_t recipeIdHash = calculateRecipeIdHash(recipeId);
-    Recipe recipe;
-
-    if (!m_storageManager->loadRecipeForExecution(recipeIdHash, recipe))
-    {
+    
+    auto jsonRecipeOpt = m_storageManager->getJsonRecipe(recipeIdHash);
+    if (!jsonRecipeOpt) {
+        ESP_LOGE(TAG, "[START_RECIPE] Recipe not found in storage: %s", recipeId.c_str());
         return;
+    }
+    ESP_LOGI(TAG, "[START_RECIPE] Recipe loaded from storage");
+    
+    std::string jsonRecipe = *jsonRecipeOpt;
+    Recipe recipe;
+    RecipeParser parser;
+    if (!parser.parseJsonToRecipe(jsonRecipe, recipe)) {
+        ESP_LOGE(TAG, "[START_RECIPE] Failed to parse JSON to Recipe");
+        return;
+    }
+    ESP_LOGI(TAG, "[START_RECIPE] Recipe parsed: name=%s", recipe.name().c_str());
+    
+    std::map<std::string, std::string> globalParams;
+    if (!JsonSerialization::extractGlobalParameters(jsonRecipe, globalParams)) {
+        ESP_LOGW(TAG, "[START_RECIPE] Failed to extract globalParameters");
+    } else {
+        ESP_LOGI(TAG, "[START_RECIPE] Extracted %d global parameters", globalParams.size());
     }
 
     if (!m_engine->loadRecipe(recipe.steps(), recipe.id(), recipe.name()))
     {
+        ESP_LOGE(TAG, "[START_RECIPE] Engine failed to load recipe");
         return;
     }
+    ESP_LOGI(TAG, "[START_RECIPE] Recipe loaded into engine");
+    
+    m_engine->setGlobalParameters(globalParams);
+    ESP_LOGI(TAG, "[START_RECIPE] Global parameters set");
+    
     if (!m_engine->start())
     {
+        ESP_LOGE(TAG, "[START_RECIPE] Engine failed to start");
         return;
     }
+    ESP_LOGI(TAG, "[START_RECIPE] Recipe started successfully!");
     sendLiveViewUpdate();
 }
 void RecipeApplicationService::handleStopRecipe()
@@ -426,29 +514,13 @@ AvailableStepsDto RecipeApplicationService::buildAvailableStepsDto() const
         {
             IoAliasMetadataDto ioDto;
             ioDto.aliasName = ioAlias.aliasName;
+            ioDto.isInput = ioAlias.isInput;
+            ioDto.isOutput = ioAlias.isOutput;
+            ioDto.isSensor = ioAlias.isSensor;
             ioDto.description = "";
             ioDto.defaultPhysicalName = ioAlias.physicalName;
-            if (ioAlias.isInput && ioAlias.isOutput)
-            {
-                ioDto.ioType = "input/output";
-            }
-            else if (ioAlias.isInput)
-            {
-                ioDto.ioType = "input";
-            }
-            else if (ioAlias.isOutput)
-            {
-                ioDto.ioType = "output";
-            }
-            else if (ioAlias.isSensor)
-            {
-                ioDto.ioType = "sensor";
-            }
-            else
-            {
-                ioDto.ioType = "unknown";
-            }
             ioDto.valueType = ioAlias.valueType;
+            ioDto.unit = ioAlias.unit;
             stepDto.ioAliases.push_back(ioDto);
         }
         dto.steps.push_back(stepDto);
@@ -484,3 +556,135 @@ void RecipeApplicationService::handleDeleteExecution(const std::string& executio
 void RecipeApplicationService::handleRequestLiveView() {
     sendLiveViewUpdate();
 }
+
+// ========== AUTHENTICATION ==========
+
+bool RecipeApplicationService::validateAndExecute(const CommandDto& dto, UserRole requiredRole, std::function<void()> action) {
+    if (!m_authManager) {
+        // No auth manager = no authentication required
+        action();
+        return true;
+    }
+    
+    if (!m_authManager->validatePassword(dto.password, requiredRole)) {
+        sendAuthError(dto, "Unauthorized: Invalid password or insufficient permissions");
+        ESP_LOGW(TAG, "Auth failed for command '%s' (required role: %d)", dto.command.c_str(), static_cast<int>(requiredRole));
+        return false;
+    }
+    
+    action();
+    return true;
+}
+
+void RecipeApplicationService::sendAuthError(const CommandDto& dto, const std::string& message) {
+    if (!m_gateway) return;
+    
+    CommandResponseDto response;
+    response.success = false;
+    response.errorCode = 401;
+    response.errorMessage = message;
+    response.requestId = dto.requestId;
+    m_gateway->send(response);
+}
+
+void RecipeApplicationService::handleAuthenticate(const CommandDto& dto) {
+    if (!m_authManager || !m_gateway) {
+        return;
+    }
+    
+    UserRole role = m_authManager->getRoleForPassword(dto.password);
+    
+    AuthResponseDto response;
+    response.success = true;
+    
+    switch(role) {
+        case UserRole::Admin:
+            response.role = "Admin";
+            break;
+        case UserRole::RecipeEditor:
+            response.role = "RecipeEditor";
+            break;
+        case UserRole::RecipeStarter:
+            response.role = "RecipeStarter";
+            break;
+        case UserRole::Observer:
+        default:
+            response.role = "Observer";
+            break;
+    }
+    
+    response.errorMessage = "";
+    m_gateway->send(response);
+    
+    ESP_LOGI(TAG, "Authentication successful: %s", response.role.c_str());
+}
+
+void RecipeApplicationService::handleChangePassword(const std::string& payloadJson) {
+    if (!m_authManager || !m_gateway) {
+        return;
+    }
+    
+    // Expected JSON: {"role": "Admin", "oldPassword": "...", "newPassword": "..."}
+    // Simple parsing (in production use proper JSON parser)
+    size_t rolePos = payloadJson.find("\"role\"");
+    size_t oldPwPos = payloadJson.find("\"oldPassword\"");
+    size_t newPwPos = payloadJson.find("\"newPassword\"");
+    
+    if (rolePos == std::string::npos || oldPwPos == std::string::npos || newPwPos == std::string::npos) {
+        CommandResponseDto response;
+        response.success = false;
+        response.errorCode = 400;
+        response.errorMessage = "Invalid payload format";
+        response.requestId = "";
+        m_gateway->send(response);
+        return;
+    }
+    
+    // Extract values (simple approach - in production use JSON library)
+    auto extractValue = [](const std::string& json, const std::string& key) -> std::string {
+        size_t keyPos = json.find("\"" + key + "\"");
+        if (keyPos == std::string::npos) return "";
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return "";
+        size_t startQuote = json.find("\"", colonPos);
+        if (startQuote == std::string::npos) return "";
+        size_t endQuote = json.find("\"", startQuote + 1);
+        if (endQuote == std::string::npos) return "";
+        return json.substr(startQuote + 1, endQuote - startQuote - 1);
+    };
+    
+    std::string roleStr = extractValue(payloadJson, "role");
+    std::string oldPassword = extractValue(payloadJson, "oldPassword");
+    std::string newPassword = extractValue(payloadJson, "newPassword");
+    
+    UserRole role = UserRole::Observer;
+    if (roleStr == "Admin") role = UserRole::Admin;
+    else if (roleStr == "RecipeEditor") role = UserRole::RecipeEditor;
+    else if (roleStr == "RecipeStarter") role = UserRole::RecipeStarter;
+    else if (roleStr == "Observer") role = UserRole::Observer;
+    
+    bool success = m_authManager->changePassword(role, oldPassword, newPassword);
+    
+    CommandResponseDto response;
+    response.success = success;
+    response.errorCode = success ? 0 : 401;
+    response.errorMessage = success ? "" : "Failed to change password (old password incorrect?)";
+    response.requestId = "";
+    m_gateway->send(response);
+}
+
+void RecipeApplicationService::handleResetPasswords(const std::string& adminPassword) {
+    if (!m_authManager || !m_gateway) {
+        return;
+    }
+    
+    bool success = m_authManager->resetToDefaults(adminPassword);
+    
+    CommandResponseDto response;
+    response.success = success;
+    response.errorCode = success ? 0 : 401;
+    response.errorMessage = success ? "All passwords reset to defaults" : "Invalid admin password";
+    response.requestId = "";
+    m_gateway->send(response);
+}
+

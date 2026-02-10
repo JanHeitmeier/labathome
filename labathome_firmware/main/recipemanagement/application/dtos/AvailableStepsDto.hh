@@ -17,10 +17,13 @@ struct ParameterMetadataDto {
 
 struct IoAliasMetadataDto {
     std::string aliasName;
-    std::string ioType;
+    bool isInput;
+    bool isOutput;
+    bool isSensor;
     std::string valueType;
     std::string description;
     std::string defaultPhysicalName;
+    std::string unit;
 };
 
 // BACKEND → FRONTEND

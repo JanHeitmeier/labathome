@@ -25,3 +25,6 @@ ExecutionStatus RecipeExecution::status() const { return status_; }
 
 void RecipeExecution::setErrorMessage(const std::string &msg) { errorMessage_ = msg; }
 std::string RecipeExecution::errorMessage() const { return errorMessage_; }
+
+void RecipeExecution::setGlobalParameters(const std::map<std::string, std::string>& params) { globalParameters_ = params; }
+std::map<std::string, std::string> RecipeExecution::globalParameters() const { return globalParameters_; }

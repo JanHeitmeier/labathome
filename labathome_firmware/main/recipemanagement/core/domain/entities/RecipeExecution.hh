@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <map>
 
 enum class ExecutionStatus {
     Running,
@@ -34,6 +35,9 @@ public:
     
     void setErrorMessage(const std::string& msg);
     std::string errorMessage() const;
+    
+    void setGlobalParameters(const std::map<std::string, std::string>& params);
+    std::map<std::string, std::string> globalParameters() const;
 
 private:
     std::string executionId_;
@@ -43,4 +47,5 @@ private:
     uint64_t endTimestamp_{0};
     ExecutionStatus status_{ExecutionStatus::Running};
     std::string errorMessage_;
+    std::map<std::string, std::string> globalParameters_;
 };

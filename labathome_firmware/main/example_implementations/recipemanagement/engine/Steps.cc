@@ -22,7 +22,7 @@ public:
     FanRampStep()
         : StepBase("FanRamp", "Ramp fan speed from start to end value over time", "1.0"),
           fanOutput("Fan", false, true, false, "float", std::nullopt, "Fan"),
-          fanDutySensor("FanDutySensor", true, false, true, "float", std::nullopt, "FanDutySensor"),
+          fanDutySensor("FanDutySensor", true, false, true, "float", std::nullopt, "FanDutySensor", "%"),
           startDutyParam("startDuty", 
                         ParameterValue::fromPercentage(0.0f),
                         "Start Duty",
@@ -308,7 +308,7 @@ private:
 public:
     MovementLedTriggerStep()
         : StepBase("MovementLedTrigger", "LED follows movement sensor, ends on user acknowledgement", "1.0"),
-          movementInput("Movement", true, false, true, "bool", std::nullopt, "Movement"),
+          movementInput("Movement", true, false, true, "bool", std::nullopt, "Movement", ""),
           ledOutput("LED", false, true, false, "uint32_t", std::nullopt, "LED0"),
           ledColorParam("ledColor", 
                        ParameterValue::fromColor(0xFF00FFFF),

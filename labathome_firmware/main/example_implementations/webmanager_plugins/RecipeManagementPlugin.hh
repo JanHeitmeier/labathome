@@ -55,4 +55,6 @@ public:
     void send(const RecipeDto& dto) override;
     void send(const ExecutionHistoryDto& dto) override;
     void send(const TimeSeriesDataDto& dto) override;
+    void send(const AuthResponseDto& dto) override;
+    void send(const CommandResponseDto& dto) override;
 };

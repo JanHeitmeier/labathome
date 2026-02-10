@@ -9,6 +9,7 @@ struct CommandDto {
     std::string executionId;  // For get_timeseries, delete_execution commands
     std::string payload;
     std::string requestId;
+    std::string password;     // For authentication
 };
 /*
 * Unterstützte Befehle:

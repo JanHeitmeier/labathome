@@ -236,24 +236,24 @@ bool StorageManager::existsExecution(const std::string& executionId) {
 
 // ========== TIMESERIES RECORDING ==========
 
-void StorageManager::startRecording(const std::string& executionId, const std::vector<std::string>& sensorNames) {
+void StorageManager::startRecording(const std::string& executionId, const std::vector<std::pair<std::string, std::string>>& sensorInfo) {
     if (m_recording) {
         flushBuffer();
     }
     
     m_currentExecutionId = executionId;
     m_buffer.clear();
-    m_buffer.reserve(sensorNames.size());
+    m_buffer.reserve(sensorInfo.size());
     m_lastRecordedTimestamp = 0;
     
-    for (const auto& name : sensorNames) {
-        m_buffer.emplace_back(name, "");
+    for (const auto& [name, unit] : sensorInfo) {
+        m_buffer.emplace_back(name, unit);
         m_buffer.back().dataPoints.reserve(BUFFER_SIZE);
     }
     
     m_recording = true;
     ESP_LOGI("StorageManager", "Started recording for execution '%s' with %zu sensors", 
-             executionId.c_str(), sensorNames.size());
+             executionId.c_str(), sensorInfo.size());
 }
 
 void StorageManager::recordDataPoint(const std::map<std::string, float>& sensorValues, uint64_t relativeTimestamp) {
@@ -388,4 +388,44 @@ bool StorageManager::deleteExecutionCompletely(const std::string& executionId) {
              executionId.c_str(), execDeleted ? "ok" : "failed", tsDeleted ? "ok" : "failed");
     
     return execDeleted && tsDeleted;
+}
+
+// ========== AUTHENTICATION PASSWORD STORAGE ==========
+
+void StorageManager::saveAuthPassword(const std::string& key, const std::string& password) {
+    if (!m_recipeStorage) {
+        ESP_LOGW("StorageManager", "Cannot save password, no recipe storage");
+        return;
+    }
+    
+    // Store as simple JSON string using recipe storage with special prefix
+    std::string storageKey = "auth_" + key;
+    uint32_t keyHash = calculateIdHash(storageKey);
+    std::string jsonValue = "\"" + password + "\"";  // Simple JSON string
+    
+    m_recipeStorage->saveJson(keyHash, jsonValue);
+    ESP_LOGI("StorageManager", "Saved password for key: %s", key.c_str());
+}
+
+std::optional<std::string> StorageManager::getAuthPassword(const std::string& key) {
+    if (!m_recipeStorage) {
+        ESP_LOGW("StorageManager", "Cannot load password, no recipe storage");
+        return std::nullopt;
+    }
+    
+    std::string storageKey = "auth_" + key;
+    uint32_t keyHash = calculateIdHash(storageKey);
+    
+    auto jsonValue = m_recipeStorage->getJson(keyHash);
+    if (!jsonValue.has_value()) {
+        return std::nullopt;
+    }
+    
+    // Remove quotes from JSON string
+    std::string password = jsonValue.value();
+    if (password.length() >= 2 && password.front() == '"' && password.back() == '"') {
+        password = password.substr(1, password.length() - 2);
+    }
+    
+    return password;
 }

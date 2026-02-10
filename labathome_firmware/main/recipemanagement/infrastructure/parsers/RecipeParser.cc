@@ -1,6 +1,9 @@
 #include "RecipeParser.hh"
 #include "../third_party/rapidjson/document.h"
 #include "../third_party/rapidjson/error/en.h"
+#include <esp_log.h>
+
+static const char* TAG = "RecipeParser";
 
 RecipeParser::RecipeParser() {
 }
@@ -9,12 +12,24 @@ RecipeParser::~RecipeParser() {
 }
 
 bool RecipeParser::parseJsonToRecipe(const std::string& jsonText, Recipe& outRecipe) {
+    ESP_LOGI(TAG, "[PARSE] Parsing recipe JSON (length=%d)", jsonText.length());
+    
     rapidjson::Document doc;
     doc.Parse(jsonText.c_str());
     
-    if (doc.HasParseError() || !doc.IsObject()) {
+    if (doc.HasParseError()) {
+        ESP_LOGE(TAG, "[PARSE] JSON parse error at offset %u: %s", 
+                 doc.GetErrorOffset(), rapidjson::GetParseError_En(doc.GetParseError()));
+        ESP_LOGE(TAG, "[PARSE] JSON snippet: %.100s", jsonText.c_str());
         return false;
     }
+    
+    if (!doc.IsObject()) {
+        ESP_LOGE(TAG, "[PARSE] JSON root is not an object");
+        return false;
+    }
+    
+    ESP_LOGI(TAG, "[PARSE] JSON parsed successfully");
     
     if (doc.HasMember("id") && doc["id"].IsString()) {
         outRecipe.setId(doc["id"].GetString());
@@ -32,13 +47,50 @@ bool RecipeParser::parseJsonToRecipe(const std::string& jsonText, Recipe& outRec
         outRecipe.setVersion(doc["version"].GetString());
     }
     
+    std::map<std::string, std::string> globalParams;
+    if (doc.HasMember("globalParameters") && doc["globalParameters"].IsObject()) {
+        const rapidjson::Value& gp = doc["globalParameters"];
+        for (auto it = gp.MemberBegin(); it != gp.MemberEnd(); ++it) {
+            std::string key = it->name.GetString();
+            std::string value;
+            
+            if (it->value.IsString()) {
+                value = it->value.GetString();
+            } else if (it->value.IsNumber()) {
+                char numBuf[32];
+                if (it->value.IsDouble()) {
+                    snprintf(numBuf, sizeof(numBuf), "%f", it->value.GetDouble());
+                } else {
+                    snprintf(numBuf, sizeof(numBuf), "%d", it->value.GetInt());
+                }
+                value = numBuf;
+            } else if (it->value.IsBool()) {
+                value = it->value.GetBool() ? "true" : "false";
+            }
+            
+            globalParams[key] = value;
+        }
+    }
+    
     std::vector<StepInstanceDescriptor> steps;
     if (!parseJsonToStepDescriptors(jsonText, steps)) {
+        ESP_LOGE(TAG, "[PARSE] Failed to parse step descriptors");
         return false;
+    }
+    ESP_LOGI(TAG, "[PARSE] Parsed %d steps", steps.size());
+    
+    for (auto& step : steps) {
+        for (const auto& [key, value] : globalParams) {
+            if (step.params.find(key) != step.params.end()) {
+                step.params[key] = value;
+            }
+        }
     }
     
     outRecipe.setSteps(steps);
     
+    ESP_LOGI(TAG, "[PARSE] Recipe parsing complete: id=%s, name=%s, steps=%d", 
+             outRecipe.id().c_str(), outRecipe.name().c_str(), steps.size());
     return true;
 }
 

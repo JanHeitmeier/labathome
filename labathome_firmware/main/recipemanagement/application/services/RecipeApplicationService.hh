@@ -7,13 +7,16 @@
 #include "../dtos/RecipeDto.hh"
 #include "../dtos/ExecutionHistoryDto.hh"
 #include "../dtos/TimeSeriesDataDto.hh"
+#include "../dtos/AuthResponseDto.hh"
 #include "../../core/interfaces/storage/IRecipeStorage.hh"
 #include "../interfaces/IMessageGateway.hh"
 #include "../../infrastructure/engine/RecipeEngine.hh"
 #include "StorageManager.hh"
 #include "RecipeHistoryService.hh"
+#include "AuthenticationManager.hh"
 #include <memory>
 #include <string>
+#include <functional>
 
 class RecipeApplicationService {
 public:
@@ -21,26 +24,30 @@ public:
         StorageManager* storageManager,
         RecipeEngine* engine,
         IMessageGateway* gateway,
-        RecipeHistoryService* historyService = nullptr
+        RecipeHistoryService* historyService = nullptr,
+        AuthenticationManager* authManager = nullptr
     );
     
     ~RecipeApplicationService();
     
     /**
      * Unterstützte Commands:
-     * - "start_recipe": Startet Rezept (recipeId erforderlich)
-     * - "stop_recipe": Stoppt laufendes Rezept
-     * - "pause_recipe": Pausiert laufendes Rezept
-     * - "resume_recipe": Setzt pausiertes Rezept fort
-     * - "acknowledge_step": Benutzer quittiert Warteposition
-     * - "get_recipe_list": Fordert Liste aller Rezepte an
-     * - "get_available_steps": Fordert Liste aller Step-Typen an
-     * - "save_recipe": Speichert Rezept (payload enthält RecipeDto als JSON)
-     * - "delete_recipe": Löscht Rezept (recipeId erforderlich)
-     * - "get_recipe": Lädt spezifisches Rezept (recipeId erforderlich)
-     * - "get_execution_history": Fordert Ausführungshistorie an
-     * - "get_timeseries": Lädt Zeitreihendaten (executionId in recipeId)
-     * - "delete_execution": Löscht Ausführung (executionId in recipeId)
+     * - "start_recipe": Startet Rezept (recipeId erforderlich) [RecipeStarter]
+     * - "stop_recipe": Stoppt laufendes Rezept [RecipeStarter]
+     * - "pause_recipe": Pausiert laufendes Rezept [RecipeStarter]
+     * - "resume_recipe": Setzt pausiertes Rezept fort [RecipeStarter]
+     * - "acknowledge_step": Benutzer quittiert Warteposition [RecipeStarter]
+     * - "get_recipe_list": Fordert Liste aller Rezepte an [Observer]
+     * - "get_available_steps": Fordert Liste aller Step-Typen an [Observer]
+     * - "save_recipe": Speichert Rezept (payload enthält RecipeDto als JSON) [RecipeEditor]
+     * - "delete_recipe": Löscht Rezept (recipeId erforderlich) [RecipeEditor]
+     * - "get_recipe": Lädt spezifisches Rezept (recipeId erforderlich) [Observer]
+     * - "get_execution_history": Fordert Ausführungshistorie an [Observer]
+     * - "get_timeseries": Lädt Zeitreihendaten (executionId in recipeId) [Observer]
+     * - "delete_execution": Löscht Ausführung (executionId in recipeId) [RecipeEditor]
+     * - "authenticate": Authentifiziert Benutzer, gibt Rolle zurück
+     * - "change_password": Ändert Passwort (payload: role, oldPw, newPw) [entsprechende Rolle]
+     * - "reset_passwords": Setzt alle Passwörter zurück [Admin]
      */
     void handleCommand(const CommandDto& dto);
     
@@ -64,16 +71,23 @@ private:
     void handleGetTimeSeries(const std::string& executionId);
     void handleDeleteExecution(const std::string& executionId);
     void handleRequestLiveView();
+    void handleAuthenticate(const CommandDto& dto);
+    void handleChangePassword(const std::string& payloadJson);
+    void handleResetPasswords(const std::string& adminPassword);
     
     LiveViewDto buildLiveViewDto() const;
     AvailableRecipesDto buildAvailableRecipesDto() const;
     AvailableStepsDto buildAvailableStepsDto() const;
+    
+    bool validateAndExecute(const CommandDto& dto, UserRole requiredRole, std::function<void()> action);
+    void sendAuthError(const CommandDto& dto, const std::string& message);
 
 private:
     StorageManager* m_storageManager;
     RecipeEngine* m_engine;
     IMessageGateway* m_gateway;
     RecipeHistoryService* m_historyService;
+    AuthenticationManager* m_authManager;
     
     RecipeApplicationService(const RecipeApplicationService&) = delete;
     RecipeApplicationService& operator=(const RecipeApplicationService&) = delete;

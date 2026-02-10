@@ -26,6 +26,7 @@ idf_component_register(
         # === Infrastructure - Storage ===
         
         # === Application Layer ===
+        "application/services/AuthenticationManager.cc"
         "application/services/StorageManager.cc"
         "application/services/RecipeApplicationService.cc"
         "application/services/RecipeHistoryService.cc"

@@ -324,7 +324,16 @@ private:
         blob += std::to_string(execution.startTimestamp()) + "|";
         blob += std::to_string(execution.endTimestamp()) + "|";
         blob += std::to_string(static_cast<int>(execution.status())) + "|";
-        blob += execution.errorMessage();
+        blob += execution.errorMessage() + "|";
+        
+        // Serialize globalParameters as "key1=value1;key2=value2;..."
+        const auto& globalParams = execution.globalParameters();
+        bool first = true;
+        for (const auto& [key, value] : globalParams) {
+            if (!first) blob += ";";
+            first = false;
+            blob += key + "=" + value;
+        }
         
         FILE* f = fopen(filename.c_str(), "w");
         if (!f) {
@@ -376,6 +385,28 @@ private:
         exec.setEndTimestamp(std::stoull(getToken()));
         exec.setStatus(static_cast<ExecutionStatus>(std::stoi(getToken())));
         exec.setErrorMessage(getToken());
+        
+        // Deserialize globalParameters from "key1=value1;key2=value2;..."
+        std::string globalParamsStr = getToken();
+        std::map<std::string, std::string> globalParams;
+        if (!globalParamsStr.empty()) {
+            size_t paramPos = 0;
+            while (paramPos < globalParamsStr.size()) {
+                size_t semicolonPos = globalParamsStr.find(';', paramPos);
+                if (semicolonPos == std::string::npos) semicolonPos = globalParamsStr.size();
+                
+                std::string pair = globalParamsStr.substr(paramPos, semicolonPos - paramPos);
+                size_t equalPos = pair.find('=');
+                if (equalPos != std::string::npos) {
+                    std::string key = pair.substr(0, equalPos);
+                    std::string value = pair.substr(equalPos + 1);
+                    globalParams[key] = value;
+                }
+                
+                paramPos = semicolonPos + 1;
+            }
+        }
+        exec.setGlobalParameters(globalParams);
         
         ESP_LOGI(TAG_STORAGE, "Loaded Execution");
         return exec;

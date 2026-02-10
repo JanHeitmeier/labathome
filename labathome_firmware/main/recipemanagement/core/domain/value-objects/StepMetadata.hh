@@ -51,6 +51,7 @@ struct IoAliasDef {
     std::string valueType; // z.B. "bool", "float"
     std::optional<ParameterValue> exampleValue;
     std::string physicalName; // Physical resource name (set at runtime from recipe)
+    std::string unit; // Unit for sensor values (e.g. "°C", "%", "RPM")
 
     explicit IoAliasDef(std::string_view aliasName,
                         bool isInput,
@@ -58,14 +59,16 @@ struct IoAliasDef {
                         bool isSensor,
                         std::string valueType = "",
                         std::optional<ParameterValue> exampleValue = std::nullopt,
-                        std::string physicalName = "")
+                        std::string physicalName = "",
+                        std::string unit = "")
         : aliasName(aliasName), 
           isInput(isInput), 
           isOutput(isOutput), 
           isSensor(isSensor),
           valueType(std::move(valueType)),
           exampleValue(std::move(exampleValue)),
-          physicalName(std::move(physicalName)) {}
+          physicalName(std::move(physicalName)),
+          unit(std::move(unit)) {}
 
     
     IoAliasDef(const IoAliasDef&) = default;

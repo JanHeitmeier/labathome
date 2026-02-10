@@ -17,13 +17,14 @@ std::string RecipeHistoryService::generateExecutionId() {
     return oss.str();
 }
 
-std::string RecipeHistoryService::startExecution(const std::string& recipeId, const std::string& recipeName) {
+std::string RecipeHistoryService::startExecution(const std::string& recipeId, const std::string& recipeName, const std::map<std::string, std::string>& globalParams) {
     std::string executionId = generateExecutionId();
     uint64_t timestamp = m_timestampProvider();
     
     RecipeExecution exec(executionId, recipeId, recipeName);
     exec.setStartTimestamp(timestamp);
     exec.setStatus(ExecutionStatus::Running);
+    exec.setGlobalParameters(globalParams);
     
     m_storageManager->saveExecution(exec);
     
@@ -81,6 +82,7 @@ RecipeExecutionDto RecipeHistoryService::toDto(const RecipeExecution& exec) {
         ? (exec.endTimestamp() - exec.startTimestamp()) : 0;
     dto.status = statusToString(exec.status());
     dto.errorMessage = exec.errorMessage();
+    dto.globalParameters = exec.globalParameters();
     return dto;
 }
 

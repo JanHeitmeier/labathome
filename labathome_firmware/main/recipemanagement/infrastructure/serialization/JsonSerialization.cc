@@ -137,14 +137,20 @@ bool JsonSerialization::serializeToBuffer(const AvailableStepsDto& dto, char* bu
             writer.StartObject();
             writer.Key("aliasName");
             writer.String(io.aliasName.empty() ? "" : io.aliasName.c_str());
-            writer.Key("ioType");
-            writer.String(io.ioType.empty() ? "" : io.ioType.c_str());
+            writer.Key("isInput");
+            writer.Bool(io.isInput);
+            writer.Key("isOutput");
+            writer.Bool(io.isOutput);
+            writer.Key("isSensor");
+            writer.Bool(io.isSensor);
             writer.Key("valueType");
             writer.String(io.valueType.empty() ? "" : io.valueType.c_str());
             writer.Key("description");
             writer.String(io.description.empty() ? "" : io.description.c_str());
             writer.Key("defaultPhysicalName");
             writer.String(io.defaultPhysicalName.empty() ? "" : io.defaultPhysicalName.c_str());
+            writer.Key("unit");
+            writer.String(io.unit.empty() ? "" : io.unit.c_str());
             writer.EndObject();
         }
         writer.EndArray();
@@ -237,6 +243,14 @@ bool JsonSerialization::serializeToBuffer(const RecipeDto& dto, char* buffer, si
     
     writer.Key("lastModified");
     writer.Uint64(dto.lastModified);
+    
+    writer.Key("globalParameters");
+    writer.StartObject();
+    for (const auto& [key, value] : dto.globalParameters) {
+        writer.Key(key.c_str());
+        writer.String(value.c_str());
+    }
+    writer.EndObject();
     
     writer.Key("steps");
     writer.StartArray();
@@ -412,6 +426,13 @@ bool JsonSerialization::deserialize(std::string_view json, CommandDto& outDto) {
         outDto.payload.clear();
     }
     
+    // password ist optional (für Authentication)
+    if (doc.HasMember("password") && doc["password"].IsString()) {
+        outDto.password = doc["password"].GetString();
+    } else {
+        outDto.password.clear();
+    }
+    
     return true;
 }
 
@@ -505,6 +526,17 @@ bool JsonSerialization::deserialize(std::string_view json, RecipeDto& outDto) {
         outDto.steps.push_back(std::move(step));
     }
     
+    // GlobalParameters-Map
+    outDto.globalParameters.clear();
+    if (doc.HasMember("globalParameters") && doc["globalParameters"].IsObject()) {
+        const auto& globalParamsObj = doc["globalParameters"].GetObject();
+        for (auto it = globalParamsObj.MemberBegin(); it != globalParamsObj.MemberEnd(); ++it) {
+            if (it->value.IsString()) {
+                outDto.globalParameters[it->name.GetString()] = it->value.GetString();
+            }
+        }
+    }
+    
     return true;
 }
 
@@ -541,6 +573,13 @@ bool JsonSerialization::serializeToBuffer(const ExecutionHistoryDto& dto, char* 
         writer.String(exec.status.empty() ? "" : exec.status.c_str());
         writer.Key("errorMessage");
         writer.String(exec.errorMessage.empty() ? "" : exec.errorMessage.c_str());
+        writer.Key("globalParameters");
+        writer.StartObject();
+        for (const auto& [key, value] : exec.globalParameters) {
+            writer.Key(key.c_str());
+            writer.String(value.c_str());
+        }
+        writer.EndObject();
         writer.EndObject();
     }
     
@@ -652,4 +691,102 @@ std::string JsonSerialization::serialize(const TimeSeriesDataDto& dto) {
     
     delete[] buffer;
     return result;
+}
+
+// ========== AUTHENTICATION DTOS ==========
+
+bool JsonSerialization::serializeToBuffer(const AuthResponseDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
+    if (!buffer || bufferSize == 0) return false;
+    
+    int written = snprintf(buffer, bufferSize,
+        "{\"success\":%s,\"role\":\"%s\",\"errorMessage\":\"%s\"}",
+        dto.success ? "true" : "false",
+        dto.role.c_str(),
+        dto.errorMessage.c_str()
+    );
+    
+    if (written < 0 || static_cast<size_t>(written) >= bufferSize) {
+        ESP_LOGE("JsonSerialization", "AuthResponseDto serialization buffer too small");
+        return false;
+    }
+    
+    outLength = static_cast<size_t>(written);
+    return true;
+}
+
+std::string JsonSerialization::serialize(const AuthResponseDto& dto) {
+    char buffer[512];
+    size_t length;
+    if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
+        return std::string(buffer, length);
+    }
+    return "";
+}
+
+bool JsonSerialization::serializeToBuffer(const CommandResponseDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
+    if (!buffer || bufferSize == 0) return false;
+    
+    int written = snprintf(buffer, bufferSize,
+        "{\"success\":%s,\"errorCode\":%d,\"errorMessage\":\"%s\",\"requestId\":\"%s\"}",
+        dto.success ? "true" : "false",
+        dto.errorCode,
+        dto.errorMessage.c_str(),
+        dto.requestId.c_str()
+    );
+    
+    if (written < 0 || static_cast<size_t>(written) >= bufferSize) {
+        ESP_LOGE("JsonSerialization", "CommandResponseDto serialization buffer too small");
+        return false;
+    }
+    
+    outLength = static_cast<size_t>(written);
+    return true;
+}
+
+std::string JsonSerialization::serialize(const CommandResponseDto& dto) {
+    char buffer[512];
+    size_t length;
+    if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
+        return std::string(buffer, length);
+    }
+    return "";
+}
+
+bool JsonSerialization::extractGlobalParameters(std::string_view json, std::map<std::string, std::string>& outParams) {
+    rapidjson::Document doc;
+    doc.Parse(json.data(), json.size());
+    
+    if (doc.HasParseError()) {
+        return false;
+    }
+    
+    if (!doc.HasMember("globalParameters") || !doc["globalParameters"].IsObject()) {
+        // Keine globalParameters vorhanden - das ist OK, die Map bleibt leer
+        outParams.clear();
+        return true;
+    }
+    
+    const rapidjson::Value& gp = doc["globalParameters"];
+    for (auto it = gp.MemberBegin(); it != gp.MemberEnd(); ++it) {
+        std::string key = it->name.GetString();
+        std::string value;
+        
+        if (it->value.IsString()) {
+            value = it->value.GetString();
+        } else if (it->value.IsNumber()) {
+            char buf[32];
+            if (it->value.IsDouble()) {
+                snprintf(buf, sizeof(buf), "%f", it->value.GetDouble());
+            } else {
+                snprintf(buf, sizeof(buf), "%d", it->value.GetInt());
+            }
+            value = buf;
+        } else if (it->value.IsBool()) {
+            value = it->value.GetBool() ? "true" : "false";
+        }
+        
+        outParams[key] = value;
+    }
+    
+    return true;
 }

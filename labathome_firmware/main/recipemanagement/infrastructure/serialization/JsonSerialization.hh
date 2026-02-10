@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 #include <cstddef>
+#include <map>
 #include "../../application/dtos/CommandDto.hh"
 #include "../../application/dtos/LiveViewDto.hh"
 #include "../../application/dtos/AvailableStepsDto.hh"
@@ -10,6 +11,7 @@
 #include "../../application/dtos/RecipeDto.hh"
 #include "../../application/dtos/ExecutionHistoryDto.hh"
 #include "../../application/dtos/TimeSeriesDataDto.hh"
+#include "../../application/dtos/AuthResponseDto.hh"
 
 class JsonSerialization {
 public:
@@ -84,6 +86,12 @@ public:
     static bool serializeToBuffer(const TimeSeriesDataDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
     static std::string serialize(const TimeSeriesDataDto& dto);
     
+    static bool serializeToBuffer(const AuthResponseDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
+    static std::string serialize(const AuthResponseDto& dto);
+    
+    static bool serializeToBuffer(const CommandResponseDto& dto, char* buffer, size_t bufferSize, size_t& outLength);
+    static std::string serialize(const CommandResponseDto& dto);
+    
     // ========== Deserialisierung (JSON → DTO) ==========
     
     /**
@@ -103,6 +111,14 @@ public:
      * @note Verwendet string_view um Kopien zu vermeiden - Aufrufer muss Lebensdauer des Strings sicherstellen
      */
     static bool deserialize(std::string_view json, RecipeDto& outDto);
+    
+    /**
+     * @brief Extrahiert globalParameters aus einem JSON-String
+     * @param json Der JSON-String mit einem "globalParameters"-Objekt
+     * @param outParams Map, in die die Parameter geschrieben werden (key-value)
+     * @return true bei Erfolg, false bei Parse-Fehler oder fehlendem globalParameters-Feld
+     */
+    static bool extractGlobalParameters(std::string_view json, std::map<std::string, std::string>& outParams);
 
 private:
     // Private Konstruktor - reine Utility-Klasse, keine Instanziierung

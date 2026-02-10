@@ -6,6 +6,7 @@
 #include "../dtos/RecipeDto.hh"
 #include "../dtos/ExecutionHistoryDto.hh"
 #include "../dtos/TimeSeriesDataDto.hh"
+#include "../dtos/AuthResponseDto.hh"
 
 class IMessageGateway {
 public:
@@ -17,4 +18,6 @@ public:
     virtual void send(const RecipeDto& dto) = 0;
     virtual void send(const ExecutionHistoryDto& dto) = 0;
     virtual void send(const TimeSeriesDataDto& dto) = 0;
+    virtual void send(const AuthResponseDto& dto) = 0;
+    virtual void send(const CommandResponseDto& dto) = 0;
 };

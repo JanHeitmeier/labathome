@@ -74,15 +74,19 @@ bool RecipeEngine::loadRecipe(const std::vector<StepInstanceDescriptor>& steps, 
     return true;
 }
 
+void RecipeEngine::setGlobalParameters(const std::map<std::string, std::string>& params) {
+    m_globalParameters = params;
+}
+
 bool RecipeEngine::start() {
     if (m_state != RecipeEngineState::Loaded && m_state != RecipeEngineState::Paused) {
         return false;
     }
     
     if (m_state == RecipeEngineState::Loaded && m_historyService && m_storageManager) {
-        m_currentExecutionId = m_historyService->startExecution(m_recipeId, m_recipeName);
-        std::vector<std::string> sensorNames = getSensorNames();
-        m_storageManager->startRecording(m_currentExecutionId, sensorNames);
+        m_currentExecutionId = m_historyService->startExecution(m_recipeId, m_recipeName, m_globalParameters);
+        std::vector<std::pair<std::string, std::string>> sensorInfo = getSensorInfo();
+        m_storageManager->startRecording(m_currentExecutionId, sensorInfo);
     }
     
     if (m_state == RecipeEngineState::Loaded && !m_stepInstances.empty()) {
@@ -335,4 +339,32 @@ std::vector<std::string> RecipeEngine::getSensorNames() const {
     }
     
     return names;
+}
+
+std::vector<std::pair<std::string, std::string>> RecipeEngine::getSensorInfo() const {
+    std::vector<std::pair<std::string, std::string>> sensorInfo;
+    
+    for (size_t i = 0; i < m_stepInstances.size(); i++) {
+        IStep* step = m_stepInstances[i].get();
+        if (!step) continue;
+        
+        StepMetadata metadata = step->getMetadata();
+        for (const auto& ioAlias : metadata.ioAliases) {
+            if (ioAlias.isInput && ioAlias.isSensor) {
+                // Check if sensor already in list
+                bool found = false;
+                for (const auto& info : sensorInfo) {
+                    if (info.first == ioAlias.aliasName) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    sensorInfo.emplace_back(ioAlias.aliasName, ioAlias.unit);
+                }
+            }
+        }
+    }
+    
+    return sensorInfo;
 }

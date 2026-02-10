@@ -26,6 +26,7 @@ public:
     ~RecipeEngine();
 
     bool loadRecipe(const std::vector<StepInstanceDescriptor>& steps, const std::string& recipeId, const std::string& recipeName = "");
+    void setGlobalParameters(const std::map<std::string, std::string>& params);
     bool start();
     bool pause();
     bool resume();
@@ -59,6 +60,7 @@ private:
     void advanceToNextStep();
     void cleanup();
     std::vector<std::string> getSensorNames() const;
+    std::vector<std::pair<std::string, std::string>> getSensorInfo() const;
     
     std::atomic<RecipeEngineState> m_state{RecipeEngineState::Idle};
     std::string m_recipeId;
@@ -84,4 +86,5 @@ private:
     StorageManager* m_storageManager{nullptr};
     RecipeHistoryService* m_historyService{nullptr};
     std::string m_currentExecutionId;
+    std::map<std::string, std::string> m_globalParameters;
 };

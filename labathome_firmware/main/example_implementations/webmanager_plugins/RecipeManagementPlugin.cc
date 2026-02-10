@@ -7,6 +7,8 @@
 #include "application/dtos/RecipeDto.hh"
 #include "application/dtos/ExecutionHistoryDto.hh"
 #include "application/dtos/TimeSeriesDataDto.hh"
+#include "application/dtos/AuthResponseDto.hh"
+#include "application/dtos/AuthResponseDto.hh"
 #include "flatbuffers_cpp/ns11recipemanagement_generated.h"
 #include <esp_log.h>
 
@@ -151,6 +153,16 @@ void RecipeManagementPlugin::send(const ExecutionHistoryDto& dto) {
 }
 
 void RecipeManagementPlugin::send(const TimeSeriesDataDto& dto) {
+    std::string json = JsonSerialization::serialize(dto);
+    sendJsonWrapped(json);
+}
+
+void RecipeManagementPlugin::send(const AuthResponseDto& dto) {
+    std::string json = JsonSerialization::serialize(dto);
+    sendJsonWrapped(json);
+}
+
+void RecipeManagementPlugin::send(const CommandResponseDto& dto) {
     std::string json = JsonSerialization::serialize(dto);
     sendJsonWrapped(json);
 }

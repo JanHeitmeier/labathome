@@ -12,7 +12,6 @@ struct StepConfigDto {
     int order;
 };
 
-// FRONTEND ↔ BACKEND
 struct RecipeDto {
     std::string id;
     std::string name;
@@ -22,4 +21,5 @@ struct RecipeDto {
     std::string version;
     uint64_t createdAt{0};
     uint64_t lastModified{0};
+    std::map<std::string, std::string> globalParameters;
 };

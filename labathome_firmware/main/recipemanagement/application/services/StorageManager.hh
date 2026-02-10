@@ -81,11 +81,16 @@ public:
 
     //TIMESERIES
     
-    void startRecording(const std::string& executionId, const std::vector<std::string>& sensorNames);
+    void startRecording(const std::string& executionId, const std::vector<std::pair<std::string, std::string>>& sensorInfo);
     void recordDataPoint(const std::map<std::string, float>& sensorValues, uint64_t relativeTimestamp);
     void stopRecording();
     bool isRecording() const;
     TimeSeriesDataDto getTimeSeries(const std::string& executionId);
     bool deleteTimeSeries(const std::string& executionId);
     size_t getTimeSeriesStorageSize(const std::string& executionId);
+    
+    // AUTHENTICATION PASSWORD STORAGE (Plain Text)
+    
+    void saveAuthPassword(const std::string& key, const std::string& password);
+    std::optional<std::string> getAuthPassword(const std::string& key);
 };
