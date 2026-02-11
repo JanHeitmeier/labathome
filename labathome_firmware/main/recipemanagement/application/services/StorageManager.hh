@@ -6,6 +6,7 @@
 #include "../../core/domain/entities/RecipeExecution.hh"
 #include "../dtos/RecipeDto.hh"
 #include "../dtos/TimeSeriesDataDto.hh"
+#include "../dtos/TimeSeriesBinaryDto.hh"
 #include <string>
 #include <vector>
 #include <optional>
@@ -70,14 +71,14 @@ public:
     std::vector<uint32_t> getAllSerializedRecipeIds();
     size_t getSerializedRecipeCount();
     
-    //EXECUTION OPERATIONS
+    // EXECUTION OPERATIONS
     
     bool saveExecution(const RecipeExecution& execution);
     std::optional<RecipeExecution> loadExecution(const std::string& executionId);
     std::vector<RecipeExecution> loadAllExecutions();
     bool deleteExecution(const std::string& executionId);
     bool existsExecution(const std::string& executionId);
-        bool deleteExecutionCompletely(const std::string& executionId);
+    bool deleteExecutionCompletely(const std::string& executionId);
 
     //TIMESERIES
     
@@ -86,6 +87,7 @@ public:
     void stopRecording();
     bool isRecording() const;
     TimeSeriesDataDto getTimeSeries(const std::string& executionId);
+    TimeSeriesBinaryDto getTimeSeriesBinary(const std::string& executionId);
     bool deleteTimeSeries(const std::string& executionId);
     size_t getTimeSeriesStorageSize(const std::string& executionId);
     

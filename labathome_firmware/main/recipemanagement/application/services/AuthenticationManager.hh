@@ -2,70 +2,51 @@
 
 #include <string>
 #include <map>
+#include <cstdint>
 
 enum class UserRole {
-    Observer = 0,      // Read-only access (no password needed for get_* commands)
+    Observer = 0,      // Read-only access
     RecipeStarter = 1, // Can start/stop/pause recipes
     RecipeEditor = 2,  // Can create/edit/delete recipes + start them
-    Admin = 3          // Full access including password changes
+    Admin = 3          // Full access including PIN changes
 };
 
-class StorageManager; // Forward declaration
+class StorageManager;
 
 class AuthenticationManager {
 public:
     explicit AuthenticationManager(StorageManager* storageManager);
     ~AuthenticationManager();
     
-    /**
-     * Validates password and checks if it meets required role level.
-     * Admin role can access everything (hierarchical).
-     * @param password The password to validate
-     * @param requiredRole Minimum role required
-     * @return true if password is valid and role sufficient
-     */
-    bool validatePassword(const std::string& password, UserRole requiredRole);
+    // Login: validates 4-digit PIN for specified role, returns session token
+    std::string login(const std::string& pin, UserRole role);
     
-    /**
-     * Gets the role for a given password.
-     * @param password The password to check
-     * @return UserRole or Observer if password invalid
-     */
-    UserRole getRoleForPassword(const std::string& password);
+    // Logout: invalidates session token
+    void logout(const std::string& sessionToken);
     
-    /**
-     * Changes password for a specific role.
-     * Requires the old password to be correct.
-     * @param role The role to change password for
-     * @param oldPassword Current password
-     * @param newPassword New password
-     * @return true if change successful
-     */
-    bool changePassword(UserRole role, const std::string& oldPassword, const std::string& newPassword);
+    // Validates session token, returns role or Observer on fail
+    UserRole validateToken(const std::string& sessionToken);
     
-    /**
-     * Loads passwords from storage or sets defaults.
-     */
-    void loadPasswords();
+    // Checks if token has required role (hierarchical)
+    bool hasPermission(const std::string& sessionToken, UserRole requiredRole);
     
-    /**
-     * Saves passwords to storage.
-     */
-    void savePasswords();
+    // Changes PIN for role (Admin only via token)
+    bool changePin(const std::string& adminToken, UserRole role, const std::string& oldPin, const std::string& newPin);
     
-    /**
-     * Resets all passwords to defaults.
-     * Requires admin password.
-     * @param adminPassword Current admin password
-     * @return true if reset successful
-     */
-    bool resetToDefaults(const std::string& adminPassword);
+    // Loads PINs from storage or sets defaults
+    void loadPins();
+    
+    // Saves PINs to storage
+    void savePins();
 
 private:
     StorageManager* m_storageManager;
-    std::map<UserRole, std::string> m_passwords;
+    std::map<UserRole, std::string> m_pins;  // 4-digit PINs
+    std::map<std::string, UserRole> m_sessions;  // token -> role
     
-    void setDefaultPasswords();
+    void setDefaultPins();
+    std::string generateToken();
+    bool isPinCorrectForRole(const std::string& pin, UserRole role);
     
     AuthenticationManager(const AuthenticationManager&) = delete;
     AuthenticationManager& operator=(const AuthenticationManager&) = delete;

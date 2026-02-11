@@ -368,6 +368,32 @@ TimeSeriesDataDto StorageManager::getTimeSeries(const std::string& executionId) 
     return dto;
 }
 
+TimeSeriesBinaryDto StorageManager::getTimeSeriesBinary(const std::string& executionId) {
+    TimeSeriesBinaryDto dto;
+    dto.executionId = executionId;
+    dto.startTime = 0;
+    
+    if (!m_timeSeriesStorage) {
+        return dto;
+    }
+    
+    // Load execution to get startTime for frontend timestamp conversion
+    if (m_executionStorage) {
+        auto execOpt = m_executionStorage->load(executionId);
+        if (execOpt.has_value()) {
+            dto.startTime = execOpt->startTimestamp();
+        }
+    }
+    
+    // Load binary data directly without deserialization
+    auto binaryData = m_timeSeriesStorage->loadTimeSeriesBinary(executionId);
+    if (binaryData.has_value()) {
+        dto.binaryData = std::move(*binaryData);
+    }
+    
+    return dto;
+}
+
 bool StorageManager::deleteTimeSeries(const std::string& executionId) {
     if (!m_timeSeriesStorage) return false;
     return m_timeSeriesStorage->deleteTimeSeries(executionId);

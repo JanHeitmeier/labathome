@@ -48,17 +48,11 @@ public:
     
     bool serialize(const Recipe& r, std::vector<uint8_t>& outBlob) override {
         outBlob.clear();
-        
-        // Convert Recipe → RecipeDto
         RecipeDto dto = recipeToDto(r);
-        
-        // Serialize to JSON string (can be used as binary format too)
         std::string json = JsonSerialization::serialize(dto);
         if (json.empty()) {
             return false;
         }
-        
-        // Convert std::string → std::vector<uint8_t>
         outBlob.assign(json.begin(), json.end());
         return true;
     }
@@ -482,5 +476,10 @@ private:
     size_t getStorageSize(const std::string& executionId) override {
         struct stat st;
         return (stat(buildPath(TIMESERIES_DIR, executionId, ".tsdata").c_str(), &st) == 0) ? st.st_size : 0;
+    }
+    
+    std::optional<std::vector<uint8_t>> loadTimeSeriesBinary(const std::string& executionId) override {
+        // Direct binary file access - no deserialization overhead
+        return readFile(buildPath(TIMESERIES_DIR, executionId, ".tsdata"));
     }
 };

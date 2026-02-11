@@ -1,143 +1,206 @@
 #include "AuthenticationManager.hh"
 #include "StorageManager.hh"
 #include <esp_log.h>
+#include <esp_random.h>
+#include <sstream>
+#include <iomanip>
 
 static const char* TAG = "AuthManager";
 
-// Storage keys for passwords
-static const char* KEY_PW_ADMIN = "pw_admin";
-static const char* KEY_PW_EDITOR = "pw_editor";
-static const char* KEY_PW_STARTER = "pw_starter";
-static const char* KEY_PW_OBSERVER = "pw_observer";
+// Storage keys for 4-digit PINs
+static const char* KEY_PIN_ADMIN = "pin_admin";
+static const char* KEY_PIN_EDITOR = "pin_editor";
+static const char* KEY_PIN_STARTER = "pin_starter";
+static const char* KEY_PIN_OBSERVER = "pin_observer";
 
 AuthenticationManager::AuthenticationManager(StorageManager* storageManager)
     : m_storageManager(storageManager)
 {
-    loadPasswords();
+    loadPins();
 }
 
 AuthenticationManager::~AuthenticationManager()
 {
 }
 
-void AuthenticationManager::setDefaultPasswords()
+void AuthenticationManager::setDefaultPins()
 {
-    m_passwords[UserRole::Admin] = "admin";
-    m_passwords[UserRole::RecipeEditor] = "editor";
-    m_passwords[UserRole::RecipeStarter] = "starter";
-    m_passwords[UserRole::Observer] = "observer";
-    ESP_LOGI(TAG, "Set default passwords");
+    m_pins[UserRole::Admin] = "0000";
+    m_pins[UserRole::RecipeEditor] = "1111";
+    m_pins[UserRole::RecipeStarter] = "2222";
+    m_pins[UserRole::Observer] = "3333";
+    ESP_LOGI(TAG, "Set default PINs");
 }
 
-void AuthenticationManager::loadPasswords()
+void AuthenticationManager::loadPins()
 {
+    ESP_LOGI(TAG, "loadPins() called, storageManager=%p", m_storageManager);
+    
     if (!m_storageManager)
     {
         ESP_LOGW(TAG, "No storage manager, using defaults");
-        setDefaultPasswords();
+        setDefaultPins();
         return;
     }
     
-    // Try to load passwords from storage
-    auto adminPw = m_storageManager->getAuthPassword(KEY_PW_ADMIN);
-    auto editorPw = m_storageManager->getAuthPassword(KEY_PW_EDITOR);
-    auto starterPw = m_storageManager->getAuthPassword(KEY_PW_STARTER);
-    auto observerPw = m_storageManager->getAuthPassword(KEY_PW_OBSERVER);
+    auto adminPin = m_storageManager->getAuthPassword(KEY_PIN_ADMIN);
+    auto editorPin = m_storageManager->getAuthPassword(KEY_PIN_EDITOR);
+    auto starterPin = m_storageManager->getAuthPassword(KEY_PIN_STARTER);
+    auto observerPin = m_storageManager->getAuthPassword(KEY_PIN_OBSERVER);
     
-    if (adminPw.has_value() && editorPw.has_value() && 
-        starterPw.has_value() && observerPw.has_value())
+    if (adminPin.has_value() && editorPin.has_value() && 
+        starterPin.has_value() && observerPin.has_value())
     {
-        m_passwords[UserRole::Admin] = adminPw.value();
-        m_passwords[UserRole::RecipeEditor] = editorPw.value();
-        m_passwords[UserRole::RecipeStarter] = starterPw.value();
-        m_passwords[UserRole::Observer] = observerPw.value();
-        ESP_LOGI(TAG, "Loaded passwords from storage");
+        m_pins[UserRole::Admin] = adminPin.value();
+        m_pins[UserRole::RecipeEditor] = editorPin.value();
+        m_pins[UserRole::RecipeStarter] = starterPin.value();
+        m_pins[UserRole::Observer] = observerPin.value();
+        ESP_LOGI(TAG, "Loaded PINs from storage - Admin:%s Editor:%s Starter:%s Observer:%s", 
+                 m_pins[UserRole::Admin].c_str(),
+                 m_pins[UserRole::RecipeEditor].c_str(),
+                 m_pins[UserRole::RecipeStarter].c_str(),
+                 m_pins[UserRole::Observer].c_str());
     }
     else
     {
-        // No stored passwords, use and save defaults
-        setDefaultPasswords();
-        savePasswords();
+        setDefaultPins();
+        savePins();
+        ESP_LOGI(TAG, "No stored PINs, using and saving defaults");
     }
 }
 
-void AuthenticationManager::savePasswords()
+void AuthenticationManager::savePins()
 {
     if (!m_storageManager)
     {
-        ESP_LOGW(TAG, "Cannot save passwords, no storage manager");
+        ESP_LOGW(TAG, "Cannot save PINs, no storage manager");
         return;
     }
     
-    m_storageManager->saveAuthPassword(KEY_PW_ADMIN, m_passwords[UserRole::Admin]);
-    m_storageManager->saveAuthPassword(KEY_PW_EDITOR, m_passwords[UserRole::RecipeEditor]);
-    m_storageManager->saveAuthPassword(KEY_PW_STARTER, m_passwords[UserRole::RecipeStarter]);
-    m_storageManager->saveAuthPassword(KEY_PW_OBSERVER, m_passwords[UserRole::Observer]);
+    m_storageManager->saveAuthPassword(KEY_PIN_ADMIN, m_pins[UserRole::Admin]);
+    m_storageManager->saveAuthPassword(KEY_PIN_EDITOR, m_pins[UserRole::RecipeEditor]);
+    m_storageManager->saveAuthPassword(KEY_PIN_STARTER, m_pins[UserRole::RecipeStarter]);
+    m_storageManager->saveAuthPassword(KEY_PIN_OBSERVER, m_pins[UserRole::Observer]);
     
-    ESP_LOGI(TAG, "Saved passwords to storage");
+    ESP_LOGI(TAG, "Saved PINs to storage");
 }
 
-UserRole AuthenticationManager::getRoleForPassword(const std::string& password)
+bool AuthenticationManager::isPinCorrectForRole(const std::string& pin, UserRole role)
 {
-    if (password.empty())
+    if (pin.empty())
     {
-        return UserRole::Observer;
+        ESP_LOGD(TAG, "isPinCorrectForRole: empty pin");
+        return false;
     }
     
-    // Check from highest to lowest role
-    if (m_passwords[UserRole::Admin] == password)
-        return UserRole::Admin;
-    if (m_passwords[UserRole::RecipeEditor] == password)
-        return UserRole::RecipeEditor;
-    if (m_passwords[UserRole::RecipeStarter] == password)
-        return UserRole::RecipeStarter;
-    if (m_passwords[UserRole::Observer] == password)
-        return UserRole::Observer;
+    bool isCorrect = (m_pins[role] == pin);
     
-    return UserRole::Observer; // Default to lowest role on invalid password
+    const char* roleNames[] = {"Observer", "RecipeStarter", "RecipeEditor", "Admin"};
+    ESP_LOGI(TAG, "isPinCorrectForRole: Checking PIN for role '%s': %s",
+             roleNames[static_cast<int>(role)],
+             isCorrect ? "CORRECT" : "INCORRECT");
+    
+    return isCorrect;
 }
 
-bool AuthenticationManager::validatePassword(const std::string& password, UserRole requiredRole)
+std::string AuthenticationManager::generateToken()
 {
-    UserRole userRole = getRoleForPassword(password);
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (int i = 0; i < 4; i++) {
+        ss << std::setw(8) << esp_random();
+    }
+    return ss.str();
+}
+
+std::string AuthenticationManager::login(const std::string& pin, UserRole role)
+{
+    const char* roleNames[] = {"Observer", "RecipeStarter", "RecipeEditor", "Admin"};
     
-    // Hierarchical check: higher roles can access lower role functions
+    ESP_LOGI(TAG, "login() called for role='%s' with pin='%s' (length=%d)",
+             roleNames[static_cast<int>(role)], pin.c_str(), pin.length());
+    
+    if (pin.length() != 4)
+    {
+        ESP_LOGW(TAG, "Login failed: Invalid PIN length: %d (expected 4)", pin.length());
+        return "";
+    }
+    
+    if (!isPinCorrectForRole(pin, role))
+    {
+        ESP_LOGW(TAG, "Login failed: Incorrect PIN for role '%s'", roleNames[static_cast<int>(role)]);
+        return "";
+    }
+    
+    std::string token = generateToken();
+    m_sessions[token] = role;
+    
+    ESP_LOGI(TAG, "Login successful for role '%s', token issued (length=%d)",
+             roleNames[static_cast<int>(role)], token.length());
+    return token;
+}
+
+void AuthenticationManager::logout(const std::string& sessionToken)
+{
+    auto it = m_sessions.find(sessionToken);
+    if (it != m_sessions.end())
+    {
+        ESP_LOGI(TAG, "Logout for role %d", static_cast<int>(it->second));
+        m_sessions.erase(it);
+    }
+}
+
+UserRole AuthenticationManager::validateToken(const std::string& sessionToken)
+{
+    auto it = m_sessions.find(sessionToken);
+    if (it != m_sessions.end())
+    {
+        return it->second;
+    }
+    return UserRole::Observer;
+}
+
+bool AuthenticationManager::hasPermission(const std::string& sessionToken, UserRole requiredRole)
+{
+    UserRole userRole = validateToken(sessionToken);
     return static_cast<int>(userRole) >= static_cast<int>(requiredRole);
 }
 
-bool AuthenticationManager::changePassword(UserRole role, const std::string& oldPassword, const std::string& newPassword)
+bool AuthenticationManager::changePin(const std::string& adminToken, UserRole role, const std::string& oldPin, const std::string& newPin)
 {
-    if (newPassword.empty())
+    const char* roleNames[] = {"Observer", "RecipeStarter", "RecipeEditor", "Admin"};
+    
+    ESP_LOGI(TAG, "changePin() called for role='%s'", roleNames[static_cast<int>(role)]);
+    
+    if (!hasPermission(adminToken, UserRole::Admin))
     {
-        ESP_LOGW(TAG, "Cannot set empty password");
+        ESP_LOGW(TAG, "PIN change denied: Unauthorized attempt (token validation failed)");
         return false;
     }
     
-    // Verify old password matches
-    if (m_passwords[role] != oldPassword)
+    if (newPin.length() != 4)
     {
-        ESP_LOGW(TAG, "Old password incorrect for role %d", static_cast<int>(role));
+        ESP_LOGW(TAG, "PIN change failed: Invalid new PIN length: %d (expected 4)", newPin.length());
         return false;
     }
     
-    m_passwords[role] = newPassword;
-    savePasswords();
-    
-    ESP_LOGI(TAG, "Password changed for role %d", static_cast<int>(role));
-    return true;
-}
-
-bool AuthenticationManager::resetToDefaults(const std::string& adminPassword)
-{
-    if (m_passwords[UserRole::Admin] != adminPassword)
+    if (m_pins[role] != oldPin)
     {
-        ESP_LOGW(TAG, "Invalid admin password for reset");
+        ESP_LOGW(TAG, "PIN change failed: Old PIN incorrect for role '%s'",
+                 roleNames[static_cast<int>(role)]);
         return false;
     }
     
-    setDefaultPasswords();
-    savePasswords();
+    std::string oldPinMasked = std::string(oldPin.length(), '*');
+    std::string newPinMasked = std::string(newPin.length(), '*');
     
-    ESP_LOGI(TAG, "All passwords reset to defaults");
+    m_pins[role] = newPin;
+    savePins();
+    
+    ESP_LOGI(TAG, "PIN successfully changed for role '%s' (old: %s -> new: %s)",
+             roleNames[static_cast<int>(role)],
+             oldPinMasked.c_str(),
+             newPinMasked.c_str());
+    
     return true;
 }

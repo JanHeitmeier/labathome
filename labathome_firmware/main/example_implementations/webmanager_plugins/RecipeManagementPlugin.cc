@@ -157,12 +157,25 @@ void RecipeManagementPlugin::send(const TimeSeriesDataDto& dto) {
     sendJsonWrapped(json);
 }
 
-void RecipeManagementPlugin::send(const AuthResponseDto& dto) {
+void RecipeManagementPlugin::send(const TimeSeriesBinaryDto& dto) {
+    ESP_LOGI(TAG, "[SEND_TS_BIN] Sending binary TimeSeries: executionId=%s, binarySize=%zu bytes",
+             dto.executionId.c_str(), dto.binaryData.size());
     std::string json = JsonSerialization::serialize(dto);
+    ESP_LOGI(TAG, "[SEND_TS_BIN] JSON size (with Base64): %zu bytes", json.size());
     sendJsonWrapped(json);
 }
 
+void RecipeManagementPlugin::send(const AuthResponseDto& dto) {
+    ESP_LOGI(TAG, "[SEND_AUTH] send AuthResponseDto called - success: %d, role: %s", 
+             dto.success, dto.role.c_str());
+    std::string json = JsonSerialization::serialize(dto);
+    ESP_LOGI(TAG, "[SEND_AUTH] Serialized JSON: %s", json.c_str());
+    sendJsonWrapped(json);
+    ESP_LOGI(TAG, "[SEND_AUTH] sendJsonWrapped completed");
+}
+
 void RecipeManagementPlugin::send(const CommandResponseDto& dto) {
+    ESP_LOGI(TAG, "[SEND_CMD_RESP] send CommandResponseDto called");
     std::string json = JsonSerialization::serialize(dto);
     sendJsonWrapped(json);
 }

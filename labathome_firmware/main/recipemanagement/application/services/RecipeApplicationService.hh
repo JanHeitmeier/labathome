@@ -24,8 +24,7 @@ public:
         StorageManager* storageManager,
         RecipeEngine* engine,
         IMessageGateway* gateway,
-        RecipeHistoryService* historyService = nullptr,
-        AuthenticationManager* authManager = nullptr
+        RecipeHistoryService* historyService = nullptr
     );
     
     ~RecipeApplicationService();
@@ -71,16 +70,16 @@ private:
     void handleGetTimeSeries(const std::string& executionId);
     void handleDeleteExecution(const std::string& executionId);
     void handleRequestLiveView();
-    void handleAuthenticate(const CommandDto& dto);
-    void handleChangePassword(const std::string& payloadJson);
-    void handleResetPasswords(const std::string& adminPassword);
+    void handleLogin(const CommandDto& dto);  // Session-Token login
+    void handleLogout(const CommandDto& dto);  // Invalidate token
+    void handleChangePin(const CommandDto& dto);  // Admin: change PIN
     
     LiveViewDto buildLiveViewDto() const;
     AvailableRecipesDto buildAvailableRecipesDto() const;
     AvailableStepsDto buildAvailableStepsDto() const;
     
     bool validateAndExecute(const CommandDto& dto, UserRole requiredRole, std::function<void()> action);
-    void sendAuthError(const CommandDto& dto, const std::string& message);
+    void sendAuthError(const CommandDto& dto, const std::string& message, int errorCode = 401);
 
 private:
     StorageManager* m_storageManager;

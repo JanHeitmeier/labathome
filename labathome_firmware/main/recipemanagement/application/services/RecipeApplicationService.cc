@@ -1,4 +1,5 @@
 #include "RecipeApplicationService.hh"
+#include "AuthenticationManager.hh"
 #include "../../infrastructure/serialization/JsonSerialization.hh"
 #include "../../infrastructure/engine/StepTypeRegistry.hh"
 #include "../../infrastructure/parsers/RecipeParser.hh"
@@ -13,13 +14,14 @@ RecipeApplicationService::RecipeApplicationService(
     StorageManager *storageManager,
     RecipeEngine *engine,
     IMessageGateway *gateway,
-    RecipeHistoryService* historyService,
-    AuthenticationManager* authManager) : m_storageManager(storageManager),
+    RecipeHistoryService* historyService) : m_storageManager(storageManager),
                                 m_engine(engine),
                                 m_gateway(gateway),
                                 m_historyService(historyService),
-                                m_authManager(authManager)
+                                m_authManager(nullptr)
 {
+    m_authManager = new AuthenticationManager(m_storageManager);
+    
     if (m_engine)
     {
         m_engine->setStateChangeCallback([this]()
@@ -28,6 +30,7 @@ RecipeApplicationService::RecipeApplicationService(
 }
 RecipeApplicationService::~RecipeApplicationService()
 {
+    delete m_authManager;
 }
 static uint32_t calculateRecipeIdHash(const std::string &recipeId)
 {
@@ -47,8 +50,59 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
 {
     const std::string &cmd = dto.command;
     
-    // Commands requiring RecipeStarter role
-    if (cmd == "start_recipe")
+    // Authentication commands (no token required)
+    if (cmd == "login")
+    {
+        ESP_LOGI(TAG, "Called handleLogin()");
+        handleLogin(dto);
+        return;
+    }
+    else if (cmd == "logout")
+    {
+        ESP_LOGI(TAG, "Called handleLogout()");
+        handleLogout(dto);
+        return;
+    }
+    else if (cmd == "change_pin")
+    {
+        ESP_LOGI(TAG, "Called handleChangePin()");
+        handleChangePin(dto);
+        return;
+    }
+    
+    // Public read-only commands (no authentication required)
+    if (cmd == "get_recipe_list")
+    {
+        ESP_LOGI(TAG, "Called handleGetRecipeList() [PUBLIC]");
+        handleGetRecipeList();
+    }
+    else if (cmd == "get_available_steps")
+    {
+        ESP_LOGI(TAG, "Called handleGetAvailableSteps() [PUBLIC]");
+        handleGetAvailableSteps();
+    }
+    else if (cmd == "get_recipe")
+    {
+        ESP_LOGI(TAG, "Called handleGetRecipe() [PUBLIC]");
+        handleGetRecipe(dto.recipeId);
+    }
+    else if (cmd == "request_live_view")
+    {
+        ESP_LOGI(TAG, "Called handleRequestLiveView() [PUBLIC]");
+        handleRequestLiveView();
+    }
+    else if (cmd == "get_execution_history")
+    {
+        ESP_LOGI(TAG, "Called handleGetExecutionHistory() [PUBLIC]");
+        handleGetExecutionHistory();
+    }
+    else if (cmd == "get_timeseries")
+    {
+        ESP_LOGI(TAG, "Called handleGetTimeSeries(%s) [PUBLIC]", dto.executionId.c_str());
+        handleGetTimeSeries(dto.executionId);
+    }
+    // RecipeStarter commands
+    else if (cmd == "start_recipe")
     {
         ESP_LOGI(TAG, "Called start_recipe: payload.len=%d, recipeId=%s", 
                  dto.payload.length(), dto.recipeId.c_str());
@@ -90,7 +144,7 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
             handleAcknowledgeStep();
         });
     }
-    // Commands requiring RecipeEditor role
+    // RecipeEditor commands
     else if (cmd == "save_recipe")
     {
         ESP_LOGI(TAG, "Called handleSaveRecipe()");
@@ -110,55 +164,6 @@ void RecipeApplicationService::handleCommand(const CommandDto &dto)
         ESP_LOGI(TAG, "Called handleDeleteExecution(%s)", dto.executionId.c_str());
         validateAndExecute(dto, UserRole::RecipeEditor, [&]() {
             handleDeleteExecution(dto.executionId);
-        });
-    }
-    // Observer commands (no authentication required)
-    else if (cmd == "get_recipe_list")
-    {
-        ESP_LOGI(TAG, "Called handleGetRecipeList()");
-        handleGetRecipeList();
-    }
-    else if (cmd == "get_available_steps")
-    {
-        ESP_LOGI(TAG, "Called handleGetAvailableSteps()");
-        handleGetAvailableSteps();
-    }
-    else if (cmd == "get_recipe")
-    {
-        ESP_LOGI(TAG, "Called handleGetRecipe()");
-        handleGetRecipe(dto.recipeId);
-    }
-    else if (cmd == "request_live_view")
-    {
-        ESP_LOGI(TAG, "Called handleRequestLiveView()");
-        handleRequestLiveView();
-    }
-    else if (cmd == "get_execution_history")
-    {
-        ESP_LOGI(TAG, "Called handleGetExecutionHistory()");
-        handleGetExecutionHistory();
-    }
-    else if (cmd == "get_timeseries")
-    {
-        ESP_LOGI(TAG, "Called handleGetTimeSeries(%s)", dto.executionId.c_str());
-        handleGetTimeSeries(dto.executionId);
-    }
-    // Authentication commands
-    else if (cmd == "authenticate")
-    {
-        ESP_LOGI(TAG, "Called handleAuthenticate()");
-        handleAuthenticate(dto);
-    }
-    else if (cmd == "change_password")
-    {
-        ESP_LOGI(TAG, "Called handleChangePassword()");
-        handleChangePassword(dto.payload);
-    }
-    else if (cmd == "reset_passwords")
-    {
-        ESP_LOGI(TAG, "Called handleResetPasswords()");
-        validateAndExecute(dto, UserRole::Admin, [&]() {
-            handleResetPasswords(dto.password);
         });
     }
 }
@@ -542,8 +547,12 @@ void RecipeApplicationService::handleGetTimeSeries(const std::string& executionI
         return;
     }
     
-    TimeSeriesDataDto dto = m_storageManager->getTimeSeries(executionId);
+    // NEW: Load as binary data for efficient transmission
+    TimeSeriesBinaryDto dto = m_storageManager->getTimeSeriesBinary(executionId);
     m_gateway->send(dto);
+    
+    ESP_LOGI(TAG, "[GET_TS] Sent binary TimeSeries: executionId=%s, size=%zu bytes",
+             executionId.c_str(), dto.binaryData.size());
 }
 
 void RecipeApplicationService::handleDeleteExecution(const std::string& executionId) {
@@ -561,14 +570,26 @@ void RecipeApplicationService::handleRequestLiveView() {
 
 bool RecipeApplicationService::validateAndExecute(const CommandDto& dto, UserRole requiredRole, std::function<void()> action) {
     if (!m_authManager) {
-        // No auth manager = no authentication required
         action();
         return true;
     }
     
-    if (!m_authManager->validatePassword(dto.password, requiredRole)) {
-        sendAuthError(dto, "Unauthorized: Invalid password or insufficient permissions");
-        ESP_LOGW(TAG, "Auth failed for command '%s' (required role: %d)", dto.command.c_str(), static_cast<int>(requiredRole));
+    // Check if token is valid (user is authenticated)
+    UserRole userRole = m_authManager->validateToken(dto.sessionToken);
+    if (dto.sessionToken.empty() || (userRole == UserRole::Observer && dto.sessionToken.length() < 16)) {
+        // No token or invalid token -> 401 Unauthorized
+        sendAuthError(dto, "Not authenticated. Please login first.", 401);
+        ESP_LOGW(TAG, "Auth failed for command '%s': No valid session token", dto.command.c_str());
+        return false;
+    }
+    
+    // Check if user has required role (sufficient permissions)
+    if (!m_authManager->hasPermission(dto.sessionToken, requiredRole)) {
+        // Valid token but insufficient role -> 403 Forbidden
+        const char* roleNames[] = {"Observer", "RecipeStarter", "RecipeEditor", "Admin"};
+        sendAuthError(dto, "Not allowed with current role. Required: " + std::string(roleNames[static_cast<int>(requiredRole)]), 403);
+        ESP_LOGW(TAG, "Auth failed for command '%s': User has role %d, required %d", 
+                 dto.command.c_str(), static_cast<int>(userRole), static_cast<int>(requiredRole));
         return false;
     }
     
@@ -576,86 +597,135 @@ bool RecipeApplicationService::validateAndExecute(const CommandDto& dto, UserRol
     return true;
 }
 
-void RecipeApplicationService::sendAuthError(const CommandDto& dto, const std::string& message) {
+void RecipeApplicationService::sendAuthError(const CommandDto& dto, const std::string& message, int errorCode) {
     if (!m_gateway) return;
     
     CommandResponseDto response;
     response.success = false;
-    response.errorCode = 401;
+    response.errorCode = errorCode;
     response.errorMessage = message;
     response.requestId = dto.requestId;
     m_gateway->send(response);
+    
+    ESP_LOGI(TAG, "Sent auth error: code=%d, message='%s'", errorCode, message.c_str());
 }
 
-void RecipeApplicationService::handleAuthenticate(const CommandDto& dto) {
+void RecipeApplicationService::handleLogin(const CommandDto& dto) {
+    ESP_LOGI(TAG, "handleLogin: pin='%s', role='%s', authManager=%p, gateway=%p", 
+             dto.pin.c_str(), dto.loginRole.c_str(), m_authManager, m_gateway);
+    
     if (!m_authManager || !m_gateway) {
+        ESP_LOGE(TAG, "handleLogin: Missing authManager or gateway!");
         return;
     }
     
-    UserRole role = m_authManager->getRoleForPassword(dto.password);
+    // Parse role from string
+    UserRole requestedRole = UserRole::Observer;
+    if (dto.loginRole == "Admin") {
+        requestedRole = UserRole::Admin;
+    } else if (dto.loginRole == "RecipeEditor") {
+        requestedRole = UserRole::RecipeEditor;
+    } else if (dto.loginRole == "RecipeStarter") {
+        requestedRole = UserRole::RecipeStarter;
+    } else if (dto.loginRole == "Observer") {
+        requestedRole = UserRole::Observer;
+    } else {
+        ESP_LOGW(TAG, "handleLogin: Unknown role '%s', defaulting to Observer", dto.loginRole.c_str());
+        requestedRole = UserRole::Observer;
+    }
+    
+    ESP_LOGI(TAG, "handleLogin: Calling m_authManager->login() for role=%d", static_cast<int>(requestedRole));
+    std::string token = m_authManager->login(dto.pin, requestedRole);
+    ESP_LOGI(TAG, "handleLogin: Token received, length=%d, empty=%d", 
+             token.length(), token.empty());
     
     AuthResponseDto response;
-    response.success = true;
-    
-    switch(role) {
-        case UserRole::Admin:
-            response.role = "Admin";
-            break;
-        case UserRole::RecipeEditor:
-            response.role = "RecipeEditor";
-            break;
-        case UserRole::RecipeStarter:
-            response.role = "RecipeStarter";
-            break;
-        case UserRole::Observer:
-        default:
-            response.role = "Observer";
-            break;
+    if (token.empty()) {
+        response.success = false;
+        response.role = "Observer";
+        response.sessionToken = "";
+        response.errorMessage = "Invalid PIN for selected role";
+        ESP_LOGW(TAG, "handleLogin: Invalid PIN for role '%s'", dto.loginRole.c_str());
+    } else {
+        response.success = true;
+        UserRole role = m_authManager->validateToken(token);
+        
+        switch(role) {
+            case UserRole::Admin:
+                response.role = "Admin";
+                break;
+            case UserRole::RecipeEditor:
+                response.role = "RecipeEditor";
+                break;
+            case UserRole::RecipeStarter:
+                response.role = "RecipeStarter";
+                break;
+            case UserRole::Observer:
+            default:
+                response.role = "Observer";
+                break;
+        }
+        
+        response.sessionToken = token;
+        response.errorMessage = "";
+        ESP_LOGI(TAG, "handleLogin: Login successful, role=%s", response.role.c_str());
     }
     
-    response.errorMessage = "";
+    ESP_LOGI(TAG, "handleLogin: Sending response via gateway");
     m_gateway->send(response);
-    
-    ESP_LOGI(TAG, "Authentication successful: %s", response.role.c_str());
+    ESP_LOGI(TAG, "Login attempt for role '%s': %s", dto.loginRole.c_str(), response.success ? "success" : "failed");
 }
 
-void RecipeApplicationService::handleChangePassword(const std::string& payloadJson) {
+void RecipeApplicationService::handleLogout(const CommandDto& dto) {
+    if (!m_authManager) {
+        return;
+    }
+    
+    m_authManager->logout(dto.sessionToken);
+    ESP_LOGI(TAG, "Logout successful");
+}
+
+void RecipeApplicationService::handleChangePin(const CommandDto& dto) {
     if (!m_authManager || !m_gateway) {
         return;
     }
     
-    // Expected JSON: {"role": "Admin", "oldPassword": "...", "newPassword": "..."}
-    // Simple parsing (in production use proper JSON parser)
-    size_t rolePos = payloadJson.find("\"role\"");
-    size_t oldPwPos = payloadJson.find("\"oldPassword\"");
-    size_t newPwPos = payloadJson.find("\"newPassword\"");
+    // Payload: "role,oldPin,newPin" (simple CSV format)
+    size_t comma1 = dto.payload.find(',');
+    size_t comma2 = dto.payload.find(',', comma1 + 1);
     
-    if (rolePos == std::string::npos || oldPwPos == std::string::npos || newPwPos == std::string::npos) {
+    if (comma1 == std::string::npos || comma2 == std::string::npos) {
         CommandResponseDto response;
         response.success = false;
         response.errorCode = 400;
-        response.errorMessage = "Invalid payload format";
-        response.requestId = "";
+        response.errorMessage = "Invalid payload format (expected: role,oldPin,newPin)";
+        response.requestId = dto.requestId;
         m_gateway->send(response);
         return;
     }
     
-    // Extract values (simple approach - in production use JSON library)
-    auto extractValue = [](const std::string& json, const std::string& key) -> std::string {
-        size_t keyPos = json.find("\"" + key + "\"");
-        if (keyPos == std::string::npos) return "";
-        size_t colonPos = json.find(":", keyPos);
-        if (colonPos == std::string::npos) return "";
-        size_t startQuote = json.find("\"", colonPos);
-        if (startQuote == std::string::npos) return "";
-        size_t endQuote = json.find("\"", startQuote + 1);
-        if (endQuote == std::string::npos) return "";
-        return json.substr(startQuote + 1, endQuote - startQuote - 1);
+    std::string roleStr = dto.payload.substr(0, comma1);
+    std::string oldPin = dto.payload.substr(comma1 + 1, comma2 - comma1 - 1);
+    std::string newPin = dto.payload.substr(comma2 + 1);
+    
+    // Trim whitespace from all parts (common issue with string parsing)
+    auto trim = [](std::string& s) {
+        // Remove leading whitespace
+        while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\n' || s.front() == '\r')) {
+            s.erase(s.begin());
+        }
+        // Remove trailing whitespace
+        while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\n' || s.back() == '\r')) {
+            s.pop_back();
+        }
     };
     
-    std::string roleStr = extractValue(payloadJson, "role");
-    std::string oldPassword = extractValue(payloadJson, "oldPassword");
-    std::string newPassword = extractValue(payloadJson, "newPassword");
+    trim(roleStr);
+    trim(oldPin);
+    trim(newPin);
+    
+    ESP_LOGI(TAG, "changePin: role='%s', oldPin.len=%d, newPin.len=%d", 
+             roleStr.c_str(), oldPin.length(), newPin.length());
     
     UserRole role = UserRole::Observer;
     if (roleStr == "Admin") role = UserRole::Admin;
@@ -663,28 +733,15 @@ void RecipeApplicationService::handleChangePassword(const std::string& payloadJs
     else if (roleStr == "RecipeStarter") role = UserRole::RecipeStarter;
     else if (roleStr == "Observer") role = UserRole::Observer;
     
-    bool success = m_authManager->changePassword(role, oldPassword, newPassword);
+    bool success = m_authManager->changePin(dto.sessionToken, role, oldPin, newPin);
     
     CommandResponseDto response;
     response.success = success;
-    response.errorCode = success ? 0 : 401;
-    response.errorMessage = success ? "" : "Failed to change password (old password incorrect?)";
-    response.requestId = "";
+    response.errorCode = success ? 0 : 403;
+    response.errorMessage = success ? "PIN changed successfully" : "Failed to change PIN (wrong oldPin or unauthorized)";
+    response.requestId = dto.requestId;
     m_gateway->send(response);
-}
-
-void RecipeApplicationService::handleResetPasswords(const std::string& adminPassword) {
-    if (!m_authManager || !m_gateway) {
-        return;
-    }
     
-    bool success = m_authManager->resetToDefaults(adminPassword);
-    
-    CommandResponseDto response;
-    response.success = success;
-    response.errorCode = success ? 0 : 401;
-    response.errorMessage = success ? "All passwords reset to defaults" : "Invalid admin password";
-    response.requestId = "";
-    m_gateway->send(response);
+    ESP_LOGI(TAG, "PIN change for role %s: %s", roleStr.c_str(), success ? "success" : "failed");
 }
 

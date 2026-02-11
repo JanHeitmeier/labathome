@@ -1,4 +1,5 @@
 #include "JsonSerialization.hh"
+#include "Base64.hh"
 #include "../third_party/rapidjson/document.h"
 #include "../third_party/rapidjson/writer.h"
 #include "../third_party/rapidjson/stringbuffer.h"
@@ -394,30 +395,25 @@ bool JsonSerialization::deserialize(std::string_view json, CommandDto& outDto) {
     
     outDto.command = doc["command"].GetString();
     
-    // recipeId ist optional
     if (doc.HasMember("recipeId") && doc["recipeId"].IsString()) {
         outDto.recipeId = doc["recipeId"].GetString();
     } else {
         outDto.recipeId.clear();
     }
     
-    // executionId ist optional (für get_timeseries, delete_execution)
     if (doc.HasMember("executionId") && doc["executionId"].IsString()) {
         outDto.executionId = doc["executionId"].GetString();
     } else {
         outDto.executionId.clear();
     }
     
-    // requestId ist optional (für Request/Response-Matching)
     if (doc.HasMember("requestId") && doc["requestId"].IsString()) {
         outDto.requestId = doc["requestId"].GetString();
     } else {
         outDto.requestId.clear();
     }
     
-    // Payload ist optional
     if (doc.HasMember("payload")) {
-        // Payload als JSON-String serialisieren (für generische Verarbeitung)
         rapidjson::StringBuffer sb;
         rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
         doc["payload"].Accept(writer);
@@ -426,11 +422,22 @@ bool JsonSerialization::deserialize(std::string_view json, CommandDto& outDto) {
         outDto.payload.clear();
     }
     
-    // password ist optional (für Authentication)
-    if (doc.HasMember("password") && doc["password"].IsString()) {
-        outDto.password = doc["password"].GetString();
+    if (doc.HasMember("sessionToken") && doc["sessionToken"].IsString()) {
+        outDto.sessionToken = doc["sessionToken"].GetString();
     } else {
-        outDto.password.clear();
+        outDto.sessionToken.clear();
+    }
+    
+    if (doc.HasMember("pin") && doc["pin"].IsString()) {
+        outDto.pin = doc["pin"].GetString();
+    } else {
+        outDto.pin.clear();
+    }
+    
+    if (doc.HasMember("loginRole") && doc["loginRole"].IsString()) {
+        outDto.loginRole = doc["loginRole"].GetString();
+    } else {
+        outDto.loginRole.clear();
     }
     
     return true;
@@ -693,15 +700,51 @@ std::string JsonSerialization::serialize(const TimeSeriesDataDto& dto) {
     return result;
 }
 
+std::string JsonSerialization::serialize(const TimeSeriesBinaryDto& dto) {
+    // Use Base64 encoding for binary data
+    std::string base64Data = Base64::encode(dto.binaryData);
+    
+    // Build compact JSON wrapper
+    // Format: {"type":"timeseries_binary","executionId":"...","startTime":123,"binaryData":"VFN..."}
+    
+    constexpr size_t HEADER_SIZE = 256;
+    char header[HEADER_SIZE];
+    int headerLen = snprintf(header, HEADER_SIZE,
+        "{\"type\":\"timeseries_binary\",\"executionId\":\"%s\",\"startTime\":%llu,\"binaryData\":\"",
+        dto.executionId.c_str(),
+        (unsigned long long)dto.startTime
+    );
+    
+    if (headerLen < 0 || static_cast<size_t>(headerLen) >= HEADER_SIZE) {
+        ESP_LOGE("JsonSerialization", "[SERIALIZE_TS_BIN] Header buffer overflow");
+        return "{}";
+    }
+    
+    // Reserve exact size to avoid reallocations
+    std::string result;
+    result.reserve(headerLen + base64Data.size() + 3);  // +3 for "\"}
+    
+    result.append(header, headerLen);
+    result.append(base64Data);
+    result.append("\"}");
+    
+    ESP_LOGI("JsonSerialization", "[SERIALIZE_TS_BIN] Encoded %zu bytes binary → %zu bytes Base64 → %zu bytes JSON (%.1f%% of original)",
+             dto.binaryData.size(), base64Data.size(), result.size(),
+             (dto.binaryData.size() > 0) ? (100.0 * result.size() / dto.binaryData.size()) : 0.0);
+    
+    return result;
+}
+
 // ========== AUTHENTICATION DTOS ==========
 
 bool JsonSerialization::serializeToBuffer(const AuthResponseDto& dto, char* buffer, size_t bufferSize, size_t& outLength) {
     if (!buffer || bufferSize == 0) return false;
     
     int written = snprintf(buffer, bufferSize,
-        "{\"success\":%s,\"role\":\"%s\",\"errorMessage\":\"%s\"}",
+        "{\"success\":%s,\"role\":\"%s\",\"sessionToken\":\"%s\",\"errorMessage\":\"%s\"}",
         dto.success ? "true" : "false",
         dto.role.c_str(),
+        dto.sessionToken.c_str(),
         dto.errorMessage.c_str()
     );
     
@@ -715,7 +758,7 @@ bool JsonSerialization::serializeToBuffer(const AuthResponseDto& dto, char* buff
 }
 
 std::string JsonSerialization::serialize(const AuthResponseDto& dto) {
-    char buffer[512];
+    char buffer[1024];
     size_t length;
     if (serializeToBuffer(dto, buffer, sizeof(buffer), length)) {
         return std::string(buffer, length);
