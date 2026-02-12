@@ -708,14 +708,14 @@ void RecipeApplicationService::handleChangePin(const CommandDto& dto) {
     std::string oldPin = dto.payload.substr(comma1 + 1, comma2 - comma1 - 1);
     std::string newPin = dto.payload.substr(comma2 + 1);
     
-    // Trim whitespace from all parts (common issue with string parsing)
+    // Trim whitespace and quotes from all parts (common issue with string parsing)
     auto trim = [](std::string& s) {
-        // Remove leading whitespace
-        while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\n' || s.front() == '\r')) {
+        // Remove leading whitespace and quotes
+        while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\n' || s.front() == '\r' || s.front() == '"' || s.front() == '\'')) {
             s.erase(s.begin());
         }
-        // Remove trailing whitespace
-        while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\n' || s.back() == '\r')) {
+        // Remove trailing whitespace and quotes
+        while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\n' || s.back() == '\r' || s.back() == '"' || s.back() == '\'')) {
             s.pop_back();
         }
     };

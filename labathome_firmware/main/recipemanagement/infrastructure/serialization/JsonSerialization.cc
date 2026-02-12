@@ -414,10 +414,15 @@ bool JsonSerialization::deserialize(std::string_view json, CommandDto& outDto) {
     }
     
     if (doc.HasMember("payload")) {
-        rapidjson::StringBuffer sb;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
-        doc["payload"].Accept(writer);
-        outDto.payload = sb.GetString();
+        // If payload is a string, use it directly; otherwise serialize to JSON
+        if (doc["payload"].IsString()) {
+            outDto.payload = doc["payload"].GetString();
+        } else {
+            rapidjson::StringBuffer sb;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+            doc["payload"].Accept(writer);
+            outDto.payload = sb.GetString();
+        }
     } else {
         outDto.payload.clear();
     }
