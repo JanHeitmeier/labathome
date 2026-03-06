@@ -329,45 +329,6 @@ bool StorageManager::isRecording() const {
 
 // ========== TIMESERIES LOADING ==========
 
-TimeSeriesDataDto StorageManager::getTimeSeries(const std::string& executionId) {
-    TimeSeriesDataDto dto;
-    dto.executionId = executionId;
-    
-    if (!m_timeSeriesStorage) {
-        return dto;
-    }
-    
-    // Load execution to get startTime for absolute timestamp conversion
-    uint64_t executionStartTime = 0;
-    if (m_executionStorage) {
-        auto execOpt = m_executionStorage->load(executionId);
-        if (execOpt.has_value()) {
-            executionStartTime = execOpt->startTimestamp();
-        }
-    }
-    
-    auto series = m_timeSeriesStorage->loadTimeSeries(executionId);
-    
-    dto.series.reserve(series.size());
-    
-    for (const auto& ts : series) {
-        SensorTimeSeriesDto seriesDto;
-        seriesDto.sensorName = ts.sensorName;
-        seriesDto.unit = ts.unit;
-        seriesDto.dataPoints.reserve(ts.dataPoints.size());
-        
-        for (const auto& pt : ts.dataPoints) {
-            // Convert relative timestamp to absolute Unix timestamp
-            uint64_t absoluteTimestamp = executionStartTime + pt.timestamp;
-            seriesDto.dataPoints.push_back({absoluteTimestamp, pt.value});
-        }
-        
-        dto.series.push_back(std::move(seriesDto));
-    }
-    
-    return dto;
-}
-
 TimeSeriesBinaryDto StorageManager::getTimeSeriesBinary(const std::string& executionId) {
     TimeSeriesBinaryDto dto;
     dto.executionId = executionId;

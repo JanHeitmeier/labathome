@@ -5,7 +5,6 @@
 #include "../dtos/AvailableRecipesDto.hh"
 #include "../dtos/RecipeDto.hh"
 #include "../dtos/ExecutionHistoryDto.hh"
-#include "../dtos/TimeSeriesDataDto.hh"
 #include "../dtos/TimeSeriesBinaryDto.hh"
 #include "../dtos/AuthResponseDto.hh"
 
@@ -18,7 +17,6 @@ public:
     virtual void send(const AvailableRecipesDto& dto) = 0;
     virtual void send(const RecipeDto& dto) = 0;
     virtual void send(const ExecutionHistoryDto& dto) = 0;
-    virtual void send(const TimeSeriesDataDto& dto) = 0;
     virtual void send(const TimeSeriesBinaryDto& dto) = 0;
     virtual void send(const AuthResponseDto& dto) = 0;
     virtual void send(const CommandResponseDto& dto) = 0;

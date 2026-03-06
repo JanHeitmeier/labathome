@@ -532,25 +532,6 @@ ErrorCode DeviceManager::CheckForNewExecutable()
 
 ErrorCode DeviceManager::Loop()
 {
-    // //TEST: Load and start test recipe via Command
-    
-    // const char* TEST_JSON = R"({
-    //   "id": "test_recipe_002",
-    //   "name": "Red-Yellow Alternating Test",
-    //   "steps": [
-    //     {"stepTypeId": "0x0001", "systemId": "step_red_led_1", "aliases": {"LED": "LED0", "RedButton": "RedButton"}},
-    //     {"stepTypeId": "0x0002", "systemId": "step_yellow_green_1", "aliases": {"LED": "LED1", "GreenButton": "GreenButton"}}
-    //     ]
-    // })";
-    // if(!m_testCommandSent){
-    //     CommandDto cmd;
-    //     cmd.command = "start_recipe";
-    //     cmd.payload = TEST_JSON;
-    //     m_recipeService->handleCommand(cmd);
-    //     m_testCommandSent = true;
-    // }
-    
-
     static uint32_t lastLoopMs = 0;
     uint32_t now = hal->GetMillis();
     

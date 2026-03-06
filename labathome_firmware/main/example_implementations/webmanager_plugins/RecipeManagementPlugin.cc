@@ -6,7 +6,6 @@
 #include "application/dtos/AvailableRecipesDto.hh"
 #include "application/dtos/RecipeDto.hh"
 #include "application/dtos/ExecutionHistoryDto.hh"
-#include "application/dtos/TimeSeriesDataDto.hh"
 #include "application/dtos/AuthResponseDto.hh"
 #include "application/dtos/AuthResponseDto.hh"
 #include "flatbuffers_cpp/ns11recipemanagement_generated.h"
@@ -124,17 +123,13 @@ void RecipeManagementPlugin::send(const LiveViewDto& dto) {
 }
 
 void RecipeManagementPlugin::send(const AvailableStepsDto& dto) {
-    ESP_LOGI(TAG, "send(AvailableStepsDto) called");
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "Serialized");
     sendJsonWrapped(json);
     ESP_LOGI(TAG, "sendJsonWrapped completed");
 }
 
 void RecipeManagementPlugin::send(const AvailableRecipesDto& dto) {
-    ESP_LOGI(TAG, "send(AvailableRecipesDto) called");
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "Serialized");
     sendJsonWrapped(json);
     ESP_LOGI(TAG, "sendJsonWrapped completed");
 }
@@ -145,31 +140,19 @@ void RecipeManagementPlugin::send(const RecipeDto& dto) {
 }
 
 void RecipeManagementPlugin::send(const ExecutionHistoryDto& dto) {
-    ESP_LOGI(TAG, "[SEND_EXEC_HIST] send ExecutionHistoryDto called");
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "[SEND_EXEC_HIST] Serialized");
     sendJsonWrapped(json);
     ESP_LOGI(TAG, "[SEND_EXEC_HIST] sendJsonWrapped completed");
 }
 
-void RecipeManagementPlugin::send(const TimeSeriesDataDto& dto) {
-    std::string json = JsonSerialization::serialize(dto);
-    sendJsonWrapped(json);
-}
-
 void RecipeManagementPlugin::send(const TimeSeriesBinaryDto& dto) {
-    ESP_LOGI(TAG, "[SEND_TS_BIN] Sending binary TimeSeries: executionId=%s, binarySize=%zu bytes",
-             dto.executionId.c_str(), dto.binaryData.size());
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "[SEND_TS_BIN] JSON size (with Base64): %zu bytes", json.size());
     sendJsonWrapped(json);
+    ESP_LOGI(TAG, "[SEND_TS_BIN] sendJsonWrapped completed");
 }
 
 void RecipeManagementPlugin::send(const AuthResponseDto& dto) {
-    ESP_LOGI(TAG, "[SEND_AUTH] send AuthResponseDto called - success: %d, role: %s", 
-             dto.success, dto.role.c_str());
     std::string json = JsonSerialization::serialize(dto);
-    ESP_LOGI(TAG, "[SEND_AUTH] Serialized JSON: %s", json.c_str());
     sendJsonWrapped(json);
     ESP_LOGI(TAG, "[SEND_AUTH] sendJsonWrapped completed");
 }

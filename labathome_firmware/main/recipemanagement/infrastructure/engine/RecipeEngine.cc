@@ -190,7 +190,7 @@ void RecipeEngine::tick(uint32_t deltaMs) {
         }
     }
     
-    executeCurrentStep(deltaMs);
+    executeCurrentStep();
 }
 
 void RecipeEngine::buildStepContext(StepContext& ctx, size_t stepIndex) {
@@ -198,8 +198,7 @@ void RecipeEngine::buildStepContext(StepContext& ctx, size_t stepIndex) {
     (void)stepIndex;
 }
 
-void RecipeEngine::executeCurrentStep(uint32_t deltaMs) {
-    (void)deltaMs;
+void RecipeEngine::executeCurrentStep() {
     
     IStep* currentStep = m_stepInstances[m_currentStepIndex].get();
     StepContext* ctx = m_stepContexts[m_currentStepIndex].get();

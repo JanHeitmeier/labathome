@@ -56,7 +56,7 @@ public:
 
 private:
     void buildStepContext(StepContext& ctx, size_t stepIndex);
-    void executeCurrentStep(uint32_t deltaMs);
+    void executeCurrentStep();
     void advanceToNextStep();
     void cleanup();
     std::vector<std::string> getSensorNames() const;

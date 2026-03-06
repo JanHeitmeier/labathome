@@ -5,7 +5,6 @@
 #include "../../core/domain/value-objects/SensorTimeSeries.hh"
 #include "../../core/domain/entities/RecipeExecution.hh"
 #include "../dtos/RecipeDto.hh"
-#include "../dtos/TimeSeriesDataDto.hh"
 #include "../dtos/TimeSeriesBinaryDto.hh"
 #include <string>
 #include <vector>
@@ -86,7 +85,7 @@ public:
     void recordDataPoint(const std::map<std::string, float>& sensorValues, uint64_t relativeTimestamp);
     void stopRecording();
     bool isRecording() const;
-    TimeSeriesDataDto getTimeSeries(const std::string& executionId);
+
     TimeSeriesBinaryDto getTimeSeriesBinary(const std::string& executionId);
     bool deleteTimeSeries(const std::string& executionId);
     size_t getTimeSeriesStorageSize(const std::string& executionId);

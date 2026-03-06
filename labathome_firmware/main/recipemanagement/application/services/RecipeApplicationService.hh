@@ -6,7 +6,6 @@
 #include "../dtos/AvailableRecipesDto.hh"
 #include "../dtos/RecipeDto.hh"
 #include "../dtos/ExecutionHistoryDto.hh"
-#include "../dtos/TimeSeriesDataDto.hh"
 #include "../dtos/AuthResponseDto.hh"
 #include "../../core/interfaces/storage/IRecipeStorage.hh"
 #include "../interfaces/IMessageGateway.hh"
