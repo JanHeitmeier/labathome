@@ -12,11 +12,6 @@
  */
 class Base64 {
 public:
-    /**
-     * @brief Encode binary data to Base64 string
-     * @param data Binary data to encode
-     * @return Base64-encoded string
-     */
     static std::string encode(const std::vector<uint8_t>& data) {
         static constexpr const char* BASE64_CHARS = 
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -64,11 +59,6 @@ public:
         return result;
     }
     
-    /**
-     * @brief Decode Base64 string to binary data (optional, not used in backend)
-     * @param base64 Base64-encoded string
-     * @return Decoded binary data
-     */
     static std::vector<uint8_t> decode(const std::string& base64) {
         static constexpr const char* BASE64_CHARS = 
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
