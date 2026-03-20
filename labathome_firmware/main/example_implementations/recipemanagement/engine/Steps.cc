@@ -151,7 +151,7 @@ public:
 				ctx.stopTimer("loadChamberRedBlinkToggleTimer");
 				redLedOn = false;
 				setLed(ctx, redLedOutput, 0x00000000, "OpenChamber: Red LED output alias is not registered");
-				setServoAngle(ctx, 20.0f);
+				setServoAngle(ctx, 0.0f);
 				closingWarningDone = true;
 				transitionReady = false;
 				ctx.startTimer("openChamberSettleTimer", std::chrono::milliseconds(800));
@@ -377,7 +377,7 @@ public:
 		          "Heater power during heating",
 		          "%",
 		          ParameterValue::fromPercentage(10.0f),
-		          ParameterValue::fromPercentage(40.0f)),
+		          ParameterValue::fromPercentage(80.0f)),
 		  heatDurationMsParam("heatDurationMs",
 		                  ParameterValue::fromTimeMilliseconds(10000),
 		                  "Heat Duration",
