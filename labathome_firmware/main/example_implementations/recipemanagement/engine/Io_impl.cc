@@ -5,7 +5,7 @@
 #include "../../../iHAL.hh"
 #include <algorithm>
 
-// ==================== Button Inputs ====================
+//Button Inputs
 
 class GreenButtonInput : public IInput {
 public:
@@ -50,9 +50,7 @@ private:
     iHAL* hal_;
 };
 
-
-// ==================== Sensor Inputs ====================
-
+//Sensor Inputs
 class MovementInput : public IInput {
 public:
     explicit MovementInput(iHAL* hal) noexcept

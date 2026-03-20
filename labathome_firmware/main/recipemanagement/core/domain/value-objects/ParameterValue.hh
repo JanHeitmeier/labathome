@@ -182,7 +182,6 @@ namespace UnitConversion {
         1000.0f                 // METER_PER_SECOND
     };
     
-    // Konvertierung von Temperatur-Einheit zu Raw
     inline uint32_t tempToRaw(float value, TemperatureUnit unit) {
         switch (unit) {
             case TemperatureUnit::KELVIN:
@@ -196,7 +195,6 @@ namespace UnitConversion {
         }
     }
     
-    // Konvertierung von Raw zu Temperatur-Einheit
     inline float rawToTemp(uint32_t raw, TemperatureUnit unit) {
         float kelvin = raw / 10.0f;
         switch (unit) {
@@ -210,18 +208,15 @@ namespace UnitConversion {
                 return 0.0f;
         }
     }
-    
-    // Konvertierung von Druck-Einheit zu Raw
+
     inline uint32_t pressureToRaw(float value, PressureUnit unit) {
         return static_cast<uint32_t>(value * PRESSURE_TO_RAW[static_cast<uint8_t>(unit)]);
     }
-    
-    // Konvertierung von Raw zu Druck-Einheit
+
     inline float rawToPressure(uint32_t raw, PressureUnit unit) {
         return raw / PRESSURE_TO_RAW[static_cast<uint8_t>(unit)];
     }
-    
-    // Volumen-Konvertierungen
+
     inline uint32_t volumeToRaw(float value, VolumeUnit unit) {
         return static_cast<uint32_t>(value * VOLUME_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -229,8 +224,7 @@ namespace UnitConversion {
     inline float rawToVolume(uint32_t raw, VolumeUnit unit) {
         return raw / VOLUME_TO_RAW[static_cast<uint8_t>(unit)];
     }
-    
-    // Masse-Konvertierungen
+
     inline uint32_t massToRaw(float value, MassUnit unit) {
         return static_cast<uint32_t>(value * MASS_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -239,7 +233,6 @@ namespace UnitConversion {
         return raw / MASS_TO_RAW[static_cast<uint8_t>(unit)];
     }
     
-    // Längen-Konvertierungen
     inline uint32_t lengthToRaw(float value, LengthUnit unit) {
         return static_cast<uint32_t>(value * LENGTH_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -247,8 +240,7 @@ namespace UnitConversion {
     inline float rawToLength(uint32_t raw, LengthUnit unit) {
         return raw / LENGTH_TO_RAW[static_cast<uint8_t>(unit)];
     }
-    
-    // Spannungs-Konvertierungen
+
     inline uint32_t voltageToRaw(float value, VoltageUnit unit) {
         return static_cast<uint32_t>(value * VOLTAGE_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -257,7 +249,6 @@ namespace UnitConversion {
         return raw / VOLTAGE_TO_RAW[static_cast<uint8_t>(unit)];
     }
     
-    // Strom-Konvertierungen
     inline uint32_t currentToRaw(float value, CurrentUnit unit) {
         return static_cast<uint32_t>(value * CURRENT_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -266,7 +257,6 @@ namespace UnitConversion {
         return raw / CURRENT_TO_RAW[static_cast<uint8_t>(unit)];
     }
     
-    // Leistungs-Konvertierungen
     inline uint32_t powerToRaw(float value, PowerUnit unit) {
         return static_cast<uint32_t>(value * POWER_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -275,7 +265,6 @@ namespace UnitConversion {
         return raw / POWER_TO_RAW[static_cast<uint8_t>(unit)];
     }
     
-    // Konzentrations-Konvertierungen
     inline uint32_t concentrationToRaw(float value, ConcentrationUnit unit) {
         return static_cast<uint32_t>(value * CONCENTRATION_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -284,7 +273,6 @@ namespace UnitConversion {
         return raw / CONCENTRATION_TO_RAW[static_cast<uint8_t>(unit)];
     }
     
-    // Geschwindigkeits-Konvertierungen
     inline uint32_t velocityToRaw(float value, VelocityUnit unit) {
         return static_cast<uint32_t>(value * VELOCITY_TO_RAW[static_cast<uint8_t>(unit)]);
     }
@@ -301,12 +289,7 @@ private:
     ParameterType m_type;
     
 public:
-    // Standard-Konstruktor (leerer/ungültiger Wert)
     ParameterValue() : m_rawValue(0), m_type(ParameterType::NONE) {}
-    
-    // ========================================================================
-    // FACTORY-METHODEN (Input-Seite)
-    // ========================================================================
     
     static ParameterValue fromTemperature(float value, TemperatureUnit unit) {
         ParameterValue pv;
@@ -488,10 +471,6 @@ public:
         return pv;
     }
     
-    // ========================================================================
-    // GETTER-METHODEN (Output-Seite)
-    // ========================================================================
-    
     float getTemperature(TemperatureUnit unit = TemperatureUnit::CELSIUS) const {
         return (m_type == ParameterType::TEMPERATURE) ? 
                UnitConversion::rawToTemp(m_rawValue, unit) : 0.0f;
@@ -586,7 +565,6 @@ public:
         return (m_type == ParameterType::ILLUMINANCE) ? static_cast<float>(m_rawValue) : 0.0f;
     }
     
-    // Get color as hex string (for web UI)
     std::string toHexColor() const {
         if (m_type != ParameterType::COLOR) {
             return "00000000";
@@ -597,24 +575,11 @@ public:
         return std::string(buffer);
     }
     
-    // Get raw color value (RGBA)
     uint32_t getColor() const {
         return (m_type == ParameterType::COLOR) ? m_rawValue : 0;
     }
     
-    // ========================================================================
     // UNIVERSAL FLOAT CONVERSION
-    // ========================================================================
-    
-    /**
-     * @brief Convert any ParameterValue to float representation
-     * 
-     * Provides standardized conversion for all parameter types to float.
-     * Used primarily for sensor data recording and visualization.
-     * 
-     * @param tempUnit Temperature unit for temperature values (default: Celsius)
-     * @return Float representation of the value, or 0.0f for invalid/unsupported types
-     */
     float toFloat(TemperatureUnit tempUnit = TemperatureUnit::CELSIUS) const {
         switch (m_type) {
             case ParameterType::BOOLEAN:
@@ -667,21 +632,8 @@ public:
         }
     }
     
-    // ========================================================================
     // STRING PARSING (für JSON/Storage → ParameterValue Konvertierung)
-    
-    /**
-     * @brief Parse String zu ParameterValue basierend auf erwartetem Type
-     * 
-     * Diese Methode wird von RecipeEngine verwendet um String-Parameter
-     * aus JSON/Storage in typisierte ParameterValue Objekte zu konvertieren.
-     * 
-     * @param valueStr String-Darstellung des Werts (z.B. "2500", "true", "25.5")
-     * @param expectedType Der erwartete ParameterType
-     * @return Geparster ParameterValue oder ungültiger Wert bei Fehler
-     */
     static ParameterValue parseFromString(const std::string& valueStr, ParameterType expectedType) {
-        // Leere Strings returnen ungültigen Wert
         if (valueStr.empty()) {
             return ParameterValue();
         }
@@ -693,7 +645,7 @@ public:
             case ParameterType::TIME_MILLISECONDS: {
                 char* end;
                 unsigned long val = std::strtoul(valueStr.c_str(), &end, 10);
-                if (end == valueStr.c_str()) return ParameterValue(); // Parse-Fehler
+                if (end == valueStr.c_str()) return ParameterValue(); 
                 return fromTimeMilliseconds(static_cast<uint32_t>(val));
             }
             
@@ -840,10 +792,7 @@ public:
         }
     }
     
-    // ========================================================================
     // TYPE-CHECKING UND METADATEN
-    // ========================================================================
-    
     ParameterType getType() const { return m_type; }
     bool isType(ParameterType type) const { return m_type == type; }
     bool isValid() const { return m_type != ParameterType::NONE; }
@@ -859,10 +808,7 @@ public:
         return names[static_cast<uint8_t>(m_type)];
     }
     
-    // ========================================================================
     // OPERATOREN
-    // ========================================================================
-    
     bool isCompatibleWith(const ParameterValue& other) const {
         return m_type != ParameterType::NONE && 
                other.m_type != ParameterType::NONE && 
@@ -910,11 +856,7 @@ public:
         return result;
     }
     
-    // ========================================================================
     // STRING-KONVERTIERUNG
-    // ========================================================================
-    
-    // Gibt nur den numerischen Wert als String zurück (ohne Unit)
     std::string toNumericString(TemperatureUnit tempUnit = TemperatureUnit::CELSIUS,
                                PressureUnit pressUnit = PressureUnit::KILOPASCAL) const {
         if (m_type == ParameterType::NONE) return "";

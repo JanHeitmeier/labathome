@@ -123,7 +123,7 @@ public:
     }
 
     /**
-     * @brief Setzt die TypeId - INTERNAL USE ONLY
+     * @brief Setzt die TypeId
      * 
      * Diese Methode wird ausschließlich von StepTypeRegistry aufgerufen.
      * Steps sollten sie niemals selbst aufrufen!

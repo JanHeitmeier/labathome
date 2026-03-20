@@ -708,7 +708,7 @@ void RecipeApplicationService::handleChangePin(const CommandDto& dto) {
     std::string oldPin = dto.payload.substr(comma1 + 1, comma2 - comma1 - 1);
     std::string newPin = dto.payload.substr(comma2 + 1);
     
-    // Trim whitespace and quotes from all parts (common issue with string parsing)
+    // Trim whitespace and quotes from all parts
     auto trim = [](std::string& s) {
         // Remove leading whitespace and quotes
         while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\n' || s.front() == '\r' || s.front() == '"' || s.front() == '\'')) {

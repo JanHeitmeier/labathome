@@ -21,6 +21,7 @@ import * as vite_helper from "@klaus-liebler/espidf-vite-secure-build-tools/vite
 import { eEncryptionMode, MyFavouriteDateTimeFormat, strInterpolator } from "@klaus-liebler/commons";
 import * as usersettings_def from "./symlink_usersettings";
 import * as cfg from "@klaus-liebler/espidf-vite-secure-build-tools/key_value_file_helper"
+import { truncate } from "node:fs/promises";
 
 
 //Default Board Type
@@ -121,7 +122,7 @@ async function flashFirmware(cb: gulp.TaskFunctionCallback){
   const c = await Context.get(contextConfig)
   if(shouldUseFlashEncryption(c)){
     await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
-    return idf.flashEncryptedFirmware(c, false, true, false); // <-- First boolean to true for overwriting wifi settings
+    return idf.flashEncryptedFirmware(c, true, true, false); // <-- First boolean to true for overwriting wifi settings
   }else{
     return idf.flashFirmware(c, true, true);
   }
