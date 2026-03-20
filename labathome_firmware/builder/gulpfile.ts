@@ -30,6 +30,8 @@ export const DEFAULT_BOARD_VERSION=150300
 //Security
 export const DEFAULT_ENCRYPTION_MODE = eEncryptionMode.ENCRYPTED as eEncryptionMode; // abgeändert da mit entcrypted board gestartet.
 export const FLASH_ENCYRPTION_STRENGTH=idf.EncryptionStrength.AES256
+// Zentraler Schalter: false = niemals verschlüsseln und niemals eFuse brennen
+export const ENABLE_FLASH_ENCRYPTION = true;
 
 //Paths
 export const IDF_PATH=globalThis.process.env.IDF_PATH as string;
@@ -98,9 +100,17 @@ async function buildFirmware(cb: gulp.TaskFunctionCallback) {
   const c=await Context.get(contextConfig)
   return idf.buildFirmware(c);
 }
+
+function shouldUseFlashEncryption(c: Context): boolean {
+  if (!ENABLE_FLASH_ENCRYPTION) {
+    return false;
+  }
+  return c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED;
+}
+
 async function encryptFirmwareIfNecessary(cb: gulp.TaskFunctionCallback) {
   const c=await Context.get(contextConfig);
-  if(c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED) {
+  if(shouldUseFlashEncryption(c)) {
     return idf.encryptPartitions_Bootloader_App_PartitionTable_OtaData(c);
   }else{
     return cb();
@@ -109,11 +119,11 @@ async function encryptFirmwareIfNecessary(cb: gulp.TaskFunctionCallback) {
 
 async function flashFirmware(cb: gulp.TaskFunctionCallback){
   const c = await Context.get(contextConfig)
-  if(c.b.flash_encryption_key_burned_and_activated || c.c.defaultEncryptionMode===eEncryptionMode.ENCRYPTED){
+  if(shouldUseFlashEncryption(c)){
     await idf.burnFlashEncryptionKeyAndActivateEncryptedFlash(c, FLASH_ENCYRPTION_STRENGTH)
     return idf.flashEncryptedFirmware(c, false, true, false); // <-- First boolean to true for overwriting wifi settings
   }else{
-    return idf.flashFirmware(c, true, false);
+    return idf.flashFirmware(c, true, true);
   }
 }
 
@@ -166,7 +176,9 @@ export async function createFiles(cb: gulp.TaskFunctionCallback) {
     }
 
   //Flash Encryption Key
-  idf.createRandomFlashEncryptionKeyLazily(await Context.get(contextConfig), FLASH_ENCYRPTION_STRENGTH);
+  if (ENABLE_FLASH_ENCRYPTION) {
+    idf.createRandomFlashEncryptionKeyLazily(await Context.get(contextConfig), FLASH_ENCYRPTION_STRENGTH);
+  }
   
   //User Settings
   await usersettings.generate_usersettings(c, usersettings_def.Build(c.b.board_name, c.b.board_version, []));

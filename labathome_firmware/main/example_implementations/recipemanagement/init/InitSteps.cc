@@ -13,14 +13,10 @@
  * - Gespeichert wird nur eine Factory-Funktion zum späteren Erzeugen
  */
 void StepTypeRegistry::init() {
-    // Test Steps
-    registerStepType<FanRampStep>();
-    registerStepType<LedSequenceStep>();
-    registerStepType<MovementLedTriggerStep>();
-    registerStepType<AcknowledgeLedFanStep>();
-    registerStepType<MultiSensorRecordingStep>();
-    registerStepType<RedLedTimedStep>();
-    registerStepType<GreenLedTimedStep>();
+    registerStepType<OpenChamberStep>();
+    registerStepType<CoolingStep>();
+    registerStepType<HeatingStep>();
+    registerStepType<TemperatureUntilAckStep>();
     
     // Steps werden nur on-demand erzeugt wenn:
     // 1. Metadaten für Web-UI angefordert werden

@@ -20,11 +20,15 @@ void IoResourceManager::init(iHAL* hal) {
     // Registriere Sensoren
     registerInput("Movement", std::make_shared<MovementInput>(hal));
     registerInput("FanDutySensor", std::make_shared<FanDutySensorInput>(hal, 0, "FanDutySensor"));
+    registerInput("Temperature", std::make_shared<TemperatureInput>(hal, "Temperature"));
+    registerInput("HeaterTemperature", std::make_shared<HeaterTemperatureInput>(hal, "HeaterTemperature"));
    
     // Registriere Outputs
     registerOutput("Fan", std::make_shared<FanOutput>(hal, 0, "Fan"));
+    registerOutput("Heater", std::make_shared<HeaterOutput>(hal, "Heater"));
     registerOutput("LED0", std::make_shared<LedOutput>(hal, 0, "LED0"));
     registerOutput("LED1", std::make_shared<LedOutput>(hal, 1, "LED1"));
     registerOutput("LED2", std::make_shared<LedOutput>(hal, 2, "LED2"));
     registerOutput("LED3", std::make_shared<LedOutput>(hal, 3, "LED3"));
+    registerOutput("Servo", std::make_shared<ServoZeroOutput>(hal, "Servo"));
 }

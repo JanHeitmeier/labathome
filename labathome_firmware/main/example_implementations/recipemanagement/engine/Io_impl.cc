@@ -74,7 +74,6 @@ private:
     iHAL* hal_;
 };
 
-
 class FanDutySensorInput : public IInput {
 public:
     explicit FanDutySensorInput(iHAL* hal, uint8_t fanIndex, const char* name = "FanDutySensor") noexcept
@@ -101,6 +100,55 @@ private:
 };
 
 
+class TemperatureInput : public IInput {
+public:
+    explicit TemperatureInput(iHAL* hal, const char* name = "Temperature") noexcept
+        : hal_(hal), name_(name) {}
+
+    ~TemperatureInput() override = default;
+
+    const char* name() const noexcept override {
+        return name_;
+    }
+
+    ParameterValue read() const override {
+        float temperature = 0.0f;
+        if (hal_) {
+            hal_->GetAirTemperatureDS18B20(&temperature);
+        }
+        return ParameterValue::fromTemperature(temperature, TemperatureUnit::CELSIUS);
+    }
+
+private:
+    iHAL* hal_;
+    const char* name_;
+};
+
+class HeaterTemperatureInput : public IInput {
+public:
+    explicit HeaterTemperatureInput(iHAL* hal, const char* name = "HeaterTemperature") noexcept
+        : hal_(hal), name_(name) {}
+
+    ~HeaterTemperatureInput() override = default;
+
+    const char* name() const noexcept override {
+        return name_;
+    }
+
+    ParameterValue read() const override {
+        float temperature = 0.0f;
+        if (hal_) {
+            hal_->GetHeaterTemperature(&temperature);
+        }
+        return ParameterValue::fromTemperature(temperature, TemperatureUnit::CELSIUS);
+    }
+
+private:
+    iHAL* hal_;
+    const char* name_;
+};
+
+
 // ==================== Outputs ====================
 
 class FanOutput : public IOutput {
@@ -118,17 +166,14 @@ public:
         if (!hal_) return;
 
         float duty = 0.0f;
-        
-        if (v.isType(ParameterType::PERCENTAGE)) {
-            duty = v.getPercentage();
-        } else if (v.isType(ParameterType::BOOLEAN)) {
-            duty = v.getBoolean() ? 100.0f : 0.0f;
-        } else if (v.isType(ParameterType::RPM)) {
+
+        if (v.isType(ParameterType::RPM)) {
             duty = static_cast<float>(v.getRPM()) / 100.0f;
-        } else if (v.isType(ParameterType::GENERIC_INT)) {
-            duty = static_cast<float>(v.getGenericInt());
-        } else if (v.isType(ParameterType::ILLUMINANCE)) {
-            duty = v.getIlluminance();
+        } else {
+            duty = v.toFloat();
+            if (v.isType(ParameterType::BOOLEAN)) {
+                duty = duty > 0.0f ? 100.0f : 0.0f;
+            }
         }
 
         duty = std::clamp(duty, 0.0f, 100.0f);
@@ -138,6 +183,35 @@ public:
 private:
     iHAL* hal_;
     uint8_t index_;
+    const char* name_;
+};
+
+
+class HeaterOutput : public IOutput {
+public:
+    explicit HeaterOutput(iHAL* hal, const char* name = "Heater") noexcept
+        : hal_(hal), name_(name) {}
+
+    ~HeaterOutput() override = default;
+
+    const char* name() const noexcept override {
+        return name_;
+    }
+
+    void write(const ParameterValue& v) override {
+        if (!hal_) return;
+
+        float duty = v.toFloat();
+        if (v.isType(ParameterType::BOOLEAN)) {
+            duty = duty > 0.0f ? 100.0f : 0.0f;
+        }
+
+        duty = std::clamp(duty, 0.0f, 100.0f);
+        hal_->SetHeaterDuty(duty);
+    }
+
+private:
+    iHAL* hal_;
     const char* name_;
 };
 
@@ -172,5 +246,40 @@ public:
 private:
     iHAL* hal_;
     uint8_t index_;
+    const char* name_;
+};
+
+class ServoZeroOutput : public IOutput {
+public:
+    explicit ServoZeroOutput(iHAL* hal, const char* name = "Servo") noexcept
+        : hal_(hal), name_(name) {}
+
+    ~ServoZeroOutput() override = default;
+
+    const char* name() const noexcept override {
+        return name_;
+    }
+
+    void write(const ParameterValue& v) override {
+        if (!hal_) return;
+
+        float angle = 0.0f;
+
+        if (v.isType(ParameterType::ANGLE)) {
+            angle = v.getAngle();
+        } else if (v.isType(ParameterType::GENERIC_INT)) {
+            angle = static_cast<float>(v.getGenericInt());
+        } else if (v.isType(ParameterType::PERCENTAGE)) {
+            angle = (v.getPercentage() / 100.0f) * 180.0f;
+        } else if (v.isType(ParameterType::BOOLEAN)) {
+            angle = v.getBoolean() ? 180.0f : 0.0f;
+        }
+
+        angle = std::clamp(angle, 0.0f, 180.0f);
+        hal_->SetServoPosition(1, angle);
+    }
+
+private:
+    iHAL* hal_;
     const char* name_;
 };
